@@ -1,0 +1,45 @@
+.DS_Store
+Thumbs.db
+
+# Python backend
+backend/.venv/
+backend/__pycache__/
+backend/*.db
+backend/*.sqlite3
+backend/.env
+backend/.pytest_cache/
+
+# Flutter/mobile
+mobile/.dart_tool/
+mobile/.packages
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.metadata
+mobile/.idea/
+mobile/.vscode/
+mobile/android/.gradle/
+mobile/android/local.properties
+
+# IDE
+.idea/
+.vscode/
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/*.pyc
+backend/family_app.db
+
+# Flutter / Dart
+mobile/.dart_tool/
+mobile/.packages
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.metadata
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
