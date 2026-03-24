@@ -5,10 +5,13 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import jwt
-from flask import Flask, g, jsonify, request
+from flask import Flask, g, jsonify, request, send_from_directory
+from werkzeug.utils import secure_filename
 
 BASE_DIR = Path(__file__).parent
 DB_PATH = BASE_DIR / "family_app.db"
+UPLOAD_DIR = BASE_DIR / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
 
 app = Flask(__name__)
 JWT_SECRET = "dev-secret-change-me"
@@ -101,13 +104,42 @@ def init_db():
             notify_days_before INTEGER NOT NULL DEFAULT 1,
             enabled INTEGER NOT NULL DEFAULT 1
         );
+        CREATE TABLE IF NOT EXISTS family_status_updates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            family_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            status_code TEXT NOT NULL,
+            note TEXT,
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS voice_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            family_id INTEGER NOT NULL,
+            sender_user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            audio_url TEXT NOT NULL,
+            duration_seconds INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS emergency_contacts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            family_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            contact_name TEXT NOT NULL,
+            relation TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            city TEXT,
+            medical_notes TEXT,
+            is_primary INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        );
         """
     )
     db.commit()
 
 
 def now_iso() -> str:
-    return datetime.utcnow().isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 def auth_user_id():
@@ -362,6 +394,36 @@ def create_daily_answer():
     return jsonify({"id": answer_id, **payload})
 
 
+@app.route("/daily-questions/<int:question_id>/answers", methods=["GET"])
+def list_daily_answers(question_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    db = get_db()
+    question = db.execute("SELECT family_id FROM daily_questions WHERE id = ?", (question_id,)).fetchone()
+    if question is None:
+        return jsonify({"error": "question not found"}), 404
+    if not user_in_family(caller_user_id, question["family_id"]):
+        return jsonify({"error": "forbidden"}), 403
+    rows = db.execute(
+        """
+        SELECT
+            da.id,
+            da.question_id,
+            da.user_id,
+            u.display_name AS user_display_name,
+            da.answer_text,
+            da.created_at
+        FROM daily_answers da
+        JOIN users u ON u.id = da.user_id
+        WHERE da.question_id = ?
+        ORDER BY da.id DESC
+        """,
+        (question_id,),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
 @app.route("/photos", methods=["POST"])
 def create_photo():
     caller_user_id, err = require_auth()
@@ -384,6 +446,54 @@ def create_photo():
     return jsonify({"id": photo_id, **payload})
 
 
+@app.route("/photos/upload", methods=["POST"])
+def upload_photo():
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    family_id_raw = request.form.get("family_id")
+    if not family_id_raw:
+        return jsonify({"error": "family_id is required"}), 400
+    try:
+        family_id = int(family_id_raw)
+    except ValueError:
+        return jsonify({"error": "family_id must be an integer"}), 400
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+    file = request.files.get("file")
+    if file is None:
+        return jsonify({"error": "file is required"}), 400
+    filename = secure_filename(file.filename or "upload.jpg")
+    if not filename:
+        filename = "upload.jpg"
+    suffix = Path(filename).suffix or ".jpg"
+    saved_name = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{secrets.token_hex(6)}{suffix}"
+    target_path = UPLOAD_DIR / saved_name
+    file.save(target_path)
+
+    image_url = f"/uploads/{saved_name}"
+    caption = request.form.get("caption", "")
+    db = get_db()
+    db.execute(
+        """
+        INSERT INTO photos (family_id, uploader_user_id, image_url, caption, created_at)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (family_id, caller_user_id, image_url, caption, now_iso()),
+    )
+    db.commit()
+    photo_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+    return jsonify(
+        {
+            "id": photo_id,
+            "family_id": family_id,
+            "uploader_user_id": caller_user_id,
+            "image_url": image_url,
+            "caption": caption,
+        }
+    )
+
+
 @app.route("/families/<int:family_id>/photos", methods=["GET"])
 def list_photos(family_id: int):
     caller_user_id, err = require_auth()
@@ -394,14 +504,40 @@ def list_photos(family_id: int):
     db = get_db()
     rows = db.execute(
         """
-        SELECT id, family_id, uploader_user_id, image_url, COALESCE(caption, '') AS caption
+        SELECT
+            p.id,
+            p.family_id,
+            p.uploader_user_id,
+            p.image_url,
+            COALESCE(p.caption, '') AS caption,
+            (
+                SELECT COUNT(1)
+                FROM photo_likes pl
+                WHERE pl.photo_id = p.id
+            ) AS like_count,
+            (
+                SELECT COUNT(1)
+                FROM photo_comments pc
+                WHERE pc.photo_id = p.id
+            ) AS comment_count,
+            EXISTS (
+                SELECT 1
+                FROM photo_likes pl2
+                WHERE pl2.photo_id = p.id AND pl2.user_id = ?
+            ) AS has_liked
         FROM photos
-        WHERE family_id = ?
-        ORDER BY id DESC
+        p
+        WHERE p.family_id = ?
+        ORDER BY p.id DESC
         """,
-        (family_id,),
+        (caller_user_id, family_id),
     ).fetchall()
     return jsonify([dict(r) for r in rows])
+
+
+@app.route("/uploads/<path:filename>", methods=["GET"])
+def serve_upload(filename: str):
+    return send_from_directory(UPLOAD_DIR, filename)
 
 
 @app.route("/photos/<int:photo_id>/comments", methods=["POST"])
@@ -429,6 +565,93 @@ def comment_photo(photo_id: int):
     return jsonify({"id": comment_id, "photo_id": photo_id, **payload})
 
 
+@app.route("/photos/<int:photo_id>/comments", methods=["GET"])
+def list_photo_comments(photo_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    db = get_db()
+    photo = db.execute("SELECT family_id FROM photos WHERE id = ?", (photo_id,)).fetchone()
+    if photo is None:
+        return jsonify({"error": "photo not found"}), 404
+    if not user_in_family(caller_user_id, photo["family_id"]):
+        return jsonify({"error": "forbidden"}), 403
+    rows = db.execute(
+        """
+        SELECT
+            pc.id,
+            pc.photo_id,
+            pc.user_id,
+            u.display_name AS user_display_name,
+            pc.content,
+            pc.created_at
+        FROM photo_comments pc
+        JOIN users u ON u.id = pc.user_id
+        WHERE pc.photo_id = ?
+        ORDER BY pc.id DESC
+        """,
+        (photo_id,),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/photos/<int:photo_id>", methods=["DELETE"])
+def delete_photo(photo_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    db = get_db()
+    photo = db.execute(
+        "SELECT id, family_id, uploader_user_id, image_url FROM photos WHERE id = ?",
+        (photo_id,),
+    ).fetchone()
+    if photo is None:
+        return jsonify({"error": "photo not found"}), 404
+    if not user_in_family(caller_user_id, photo["family_id"]):
+        return jsonify({"error": "forbidden"}), 403
+    if caller_user_id != photo["uploader_user_id"]:
+        return jsonify({"error": "only uploader can delete this photo"}), 403
+
+    db.execute("DELETE FROM photo_comments WHERE photo_id = ?", (photo_id,))
+    db.execute("DELETE FROM photo_likes WHERE photo_id = ?", (photo_id,))
+    db.execute("DELETE FROM photos WHERE id = ?", (photo_id,))
+    db.commit()
+
+    image_url = photo["image_url"] or ""
+    if image_url.startswith("/uploads/"):
+        file_path = UPLOAD_DIR / image_url.replace("/uploads/", "", 1)
+        if file_path.exists():
+            file_path.unlink()
+    return jsonify({"message": "deleted"})
+
+
+@app.route("/photos/<int:photo_id>", methods=["PATCH"])
+def update_photo(photo_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    payload = request.get_json(force=True)
+    caption = payload.get("caption")
+    if caption is None:
+        return jsonify({"error": "caption is required"}), 400
+
+    db = get_db()
+    photo = db.execute(
+        "SELECT id, family_id, uploader_user_id FROM photos WHERE id = ?",
+        (photo_id,),
+    ).fetchone()
+    if photo is None:
+        return jsonify({"error": "photo not found"}), 404
+    if not user_in_family(caller_user_id, photo["family_id"]):
+        return jsonify({"error": "forbidden"}), 403
+    if caller_user_id != photo["uploader_user_id"]:
+        return jsonify({"error": "only uploader can edit this photo"}), 403
+
+    db.execute("UPDATE photos SET caption = ? WHERE id = ?", (caption, photo_id))
+    db.commit()
+    return jsonify({"message": "updated", "id": photo_id, "caption": caption})
+
+
 @app.route("/photos/<int:photo_id>/likes", methods=["POST"])
 def like_photo(photo_id: int):
     caller_user_id, err = require_auth()
@@ -451,6 +674,25 @@ def like_photo(photo_id: int):
     except sqlite3.IntegrityError:
         return jsonify({"message": "already liked"})
     return jsonify({"message": "liked"})
+
+
+@app.route("/photos/<int:photo_id>/likes", methods=["DELETE"])
+def unlike_photo(photo_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    db = get_db()
+    photo = db.execute("SELECT family_id FROM photos WHERE id = ?", (photo_id,)).fetchone()
+    if photo is None:
+        return jsonify({"error": "photo not found"}), 404
+    if not user_in_family(caller_user_id, photo["family_id"]):
+        return jsonify({"error": "forbidden"}), 403
+    db.execute(
+        "DELETE FROM photo_likes WHERE photo_id = ? AND user_id = ?",
+        (photo_id, caller_user_id),
+    )
+    db.commit()
+    return jsonify({"message": "unliked"})
 
 
 @app.route("/birthday-reminders", methods=["POST"])
@@ -518,6 +760,514 @@ def list_birthday_reminders(family_id: int):
         (family_id,),
     ).fetchall()
     return jsonify([dict(r) for r in rows])
+
+
+@app.route("/families/<int:family_id>/activities", methods=["GET"])
+def list_family_activities(family_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT * FROM (
+            SELECT
+                'daily_question' AS activity_type,
+                dq.id AS activity_id,
+                'Family member' AS actor_name,
+                dq.question_text AS content,
+                dq.created_at AS created_at
+            FROM daily_questions dq
+            WHERE dq.family_id = ?
+
+            UNION ALL
+
+            SELECT
+                'photo' AS activity_type,
+                p.id AS activity_id,
+                u.display_name AS actor_name,
+                COALESCE(p.caption, '') AS content,
+                p.created_at AS created_at
+            FROM photos p
+            JOIN users u ON u.id = p.uploader_user_id
+            WHERE p.family_id = ?
+
+            UNION ALL
+
+            SELECT
+                'daily_answer' AS activity_type,
+                da.id AS activity_id,
+                u.display_name AS actor_name,
+                da.answer_text AS content,
+                da.created_at AS created_at
+            FROM daily_answers da
+            JOIN daily_questions dq ON dq.id = da.question_id
+            JOIN users u ON u.id = da.user_id
+            WHERE dq.family_id = ?
+
+            UNION ALL
+
+            SELECT
+                'photo_comment' AS activity_type,
+                pc.id AS activity_id,
+                u.display_name AS actor_name,
+                pc.content AS content,
+                pc.created_at AS created_at
+            FROM photo_comments pc
+            JOIN photos p ON p.id = pc.photo_id
+            JOIN users u ON u.id = pc.user_id
+            WHERE p.family_id = ?
+        )
+        ORDER BY created_at DESC
+        LIMIT 50
+        """,
+        (family_id, family_id, family_id, family_id),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/birthday-reminders/<int:reminder_id>", methods=["PATCH"])
+def update_birthday_reminder(reminder_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    payload = request.get_json(force=True)
+    birthday = payload.get("birthday")
+    notify_days_before = payload.get("notify_days_before")
+    enabled = payload.get("enabled")
+
+    db = get_db()
+    reminder = db.execute(
+        "SELECT id, family_id, user_id FROM birthday_reminders WHERE id = ?",
+        (reminder_id,),
+    ).fetchone()
+    if reminder is None:
+        return jsonify({"error": "reminder not found"}), 404
+    if not user_in_family(caller_user_id, reminder["family_id"]):
+        return jsonify({"error": "forbidden"}), 403
+    if caller_user_id != reminder["user_id"]:
+        return jsonify({"error": "only creator can edit reminder"}), 403
+
+    fields = []
+    params = []
+    if birthday is not None:
+        fields.append("birthday = ?")
+        params.append(birthday)
+    if notify_days_before is not None:
+        fields.append("notify_days_before = ?")
+        params.append(int(notify_days_before))
+    if enabled is not None:
+        fields.append("enabled = ?")
+        params.append(1 if bool(enabled) else 0)
+    if not fields:
+        return jsonify({"error": "no update fields provided"}), 400
+
+    params.append(reminder_id)
+    db.execute(f"UPDATE birthday_reminders SET {', '.join(fields)} WHERE id = ?", params)
+    db.commit()
+    return jsonify({"message": "updated", "id": reminder_id})
+
+
+@app.route("/birthday-reminders/<int:reminder_id>", methods=["DELETE"])
+def delete_birthday_reminder(reminder_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    db = get_db()
+    reminder = db.execute(
+        "SELECT id, family_id, user_id FROM birthday_reminders WHERE id = ?",
+        (reminder_id,),
+    ).fetchone()
+    if reminder is None:
+        return jsonify({"error": "reminder not found"}), 404
+    if not user_in_family(caller_user_id, reminder["family_id"]):
+        return jsonify({"error": "forbidden"}), 403
+    if caller_user_id != reminder["user_id"]:
+        return jsonify({"error": "only creator can delete reminder"}), 403
+    db.execute("DELETE FROM birthday_reminders WHERE id = ?", (reminder_id,))
+    db.commit()
+    return jsonify({"message": "deleted"})
+
+
+@app.route("/families/<int:family_id>/status-updates", methods=["POST"])
+def create_status_update(family_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+    payload = request.get_json(force=True)
+    status_code = payload.get("status_code", "").strip()
+    note = payload.get("note", "").strip()
+    if not status_code:
+        return jsonify({"error": "status_code is required"}), 400
+    db = get_db()
+    db.execute(
+        """
+        INSERT INTO family_status_updates (family_id, user_id, status_code, note, created_at)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (family_id, caller_user_id, status_code, note, now_iso()),
+    )
+    db.commit()
+    update_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+    return jsonify(
+        {
+            "id": update_id,
+            "family_id": family_id,
+            "user_id": caller_user_id,
+            "status_code": status_code,
+            "note": note,
+        }
+    )
+
+
+@app.route("/families/<int:family_id>/status-updates", methods=["GET"])
+def list_status_updates(family_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT
+            s.id,
+            s.family_id,
+            s.user_id,
+            u.display_name AS user_display_name,
+            s.status_code,
+            COALESCE(s.note, '') AS note,
+            s.created_at
+        FROM family_status_updates s
+        JOIN users u ON u.id = s.user_id
+        WHERE s.family_id = ?
+        ORDER BY s.id DESC
+        LIMIT 100
+        """,
+        (family_id,),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/families/<int:family_id>/voice-messages", methods=["POST"])
+def create_voice_message(family_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+    payload = request.get_json(force=True)
+    title = payload.get("title", "").strip()
+    audio_url = payload.get("audio_url", "").strip()
+    duration_seconds = int(payload.get("duration_seconds", 0))
+    if not title or not audio_url:
+        return jsonify({"error": "title and audio_url are required"}), 400
+    db = get_db()
+    db.execute(
+        """
+        INSERT INTO voice_messages (family_id, sender_user_id, title, audio_url, duration_seconds, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (family_id, caller_user_id, title, audio_url, duration_seconds, now_iso()),
+    )
+    db.commit()
+    msg_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+    return jsonify(
+        {
+            "id": msg_id,
+            "family_id": family_id,
+            "sender_user_id": caller_user_id,
+            "title": title,
+            "audio_url": audio_url,
+            "duration_seconds": duration_seconds,
+        }
+    )
+
+
+@app.route("/families/<int:family_id>/voice-messages", methods=["GET"])
+def list_voice_messages(family_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT
+            v.id,
+            v.family_id,
+            v.sender_user_id,
+            u.display_name AS sender_display_name,
+            v.title,
+            v.audio_url,
+            v.duration_seconds,
+            v.created_at
+        FROM voice_messages v
+        JOIN users u ON u.id = v.sender_user_id
+        WHERE v.family_id = ?
+        ORDER BY v.id DESC
+        LIMIT 100
+        """,
+        (family_id,),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/families/<int:family_id>/voice-messages/upload", methods=["POST"])
+def upload_voice_message(family_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+
+    title = (request.form.get("title") or "").strip()
+    if not title:
+        return jsonify({"error": "title is required"}), 400
+    duration_raw = request.form.get("duration_seconds", "0")
+    try:
+        duration_seconds = int(duration_raw)
+    except ValueError:
+        duration_seconds = 0
+
+    file = request.files.get("file")
+    if file is None:
+        return jsonify({"error": "file is required"}), 400
+    filename = secure_filename(file.filename or "voice.m4a")
+    suffix = Path(filename).suffix or ".m4a"
+    saved_name = f"voice_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{secrets.token_hex(6)}{suffix}"
+    target_path = UPLOAD_DIR / saved_name
+    file.save(target_path)
+
+    audio_url = f"/uploads/{saved_name}"
+    db = get_db()
+    db.execute(
+        """
+        INSERT INTO voice_messages (family_id, sender_user_id, title, audio_url, duration_seconds, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (family_id, caller_user_id, title, audio_url, duration_seconds, now_iso()),
+    )
+    db.commit()
+    msg_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+    return jsonify(
+        {
+            "id": msg_id,
+            "family_id": family_id,
+            "sender_user_id": caller_user_id,
+            "title": title,
+            "audio_url": audio_url,
+            "duration_seconds": duration_seconds,
+        }
+    )
+
+
+@app.route("/voice-messages/<int:message_id>", methods=["PATCH"])
+def update_voice_message(message_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    payload = request.get_json(force=True)
+    title = (payload.get("title") or "").strip()
+    if not title:
+        return jsonify({"error": "title is required"}), 400
+    db = get_db()
+    row = db.execute(
+        "SELECT id, family_id, sender_user_id FROM voice_messages WHERE id = ?",
+        (message_id,),
+    ).fetchone()
+    if row is None:
+        return jsonify({"error": "voice message not found"}), 404
+    if not user_in_family(caller_user_id, row["family_id"]):
+        return jsonify({"error": "forbidden"}), 403
+    if caller_user_id != row["sender_user_id"]:
+        return jsonify({"error": "only sender can edit"}), 403
+    db.execute("UPDATE voice_messages SET title = ? WHERE id = ?", (title, message_id))
+    db.commit()
+    return jsonify({"message": "updated", "id": message_id, "title": title})
+
+
+@app.route("/voice-messages/<int:message_id>", methods=["DELETE"])
+def delete_voice_message(message_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    db = get_db()
+    row = db.execute(
+        "SELECT id, family_id, sender_user_id, audio_url FROM voice_messages WHERE id = ?",
+        (message_id,),
+    ).fetchone()
+    if row is None:
+        return jsonify({"error": "voice message not found"}), 404
+    if not user_in_family(caller_user_id, row["family_id"]):
+        return jsonify({"error": "forbidden"}), 403
+    if caller_user_id != row["sender_user_id"]:
+        return jsonify({"error": "only sender can delete"}), 403
+    db.execute("DELETE FROM voice_messages WHERE id = ?", (message_id,))
+    db.commit()
+
+    audio_url = row["audio_url"] or ""
+    if audio_url.startswith("/uploads/"):
+        file_path = UPLOAD_DIR / audio_url.replace("/uploads/", "", 1)
+        if file_path.exists():
+            file_path.unlink()
+    return jsonify({"message": "deleted", "id": message_id})
+
+
+@app.route("/families/<int:family_id>/emergency-contacts", methods=["POST"])
+def create_emergency_contact(family_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+    payload = request.get_json(force=True)
+    contact_name = payload.get("contact_name", "").strip()
+    relation = payload.get("relation", "").strip()
+    phone = payload.get("phone", "").strip()
+    city = payload.get("city", "").strip()
+    medical_notes = payload.get("medical_notes", "").strip()
+    is_primary = 1 if bool(payload.get("is_primary", False)) else 0
+    if not contact_name or not relation or not phone:
+        return jsonify({"error": "contact_name, relation, phone are required"}), 400
+    db = get_db()
+    db.execute(
+        """
+        INSERT INTO emergency_contacts
+            (family_id, user_id, contact_name, relation, phone, city, medical_notes, is_primary, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (family_id, caller_user_id, contact_name, relation, phone, city, medical_notes, is_primary, now_iso()),
+    )
+    db.commit()
+    contact_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+    return jsonify(
+        {
+            "id": contact_id,
+            "family_id": family_id,
+            "user_id": caller_user_id,
+            "contact_name": contact_name,
+            "relation": relation,
+            "phone": phone,
+            "city": city,
+            "medical_notes": medical_notes,
+            "is_primary": is_primary,
+        }
+    )
+
+
+@app.route("/families/<int:family_id>/emergency-contacts", methods=["GET"])
+def list_emergency_contacts(family_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT
+            e.id,
+            e.family_id,
+            e.user_id,
+            u.display_name AS user_display_name,
+            e.contact_name,
+            e.relation,
+            e.phone,
+            COALESCE(e.city, '') AS city,
+            COALESCE(e.medical_notes, '') AS medical_notes,
+            e.is_primary,
+            e.created_at
+        FROM emergency_contacts e
+        JOIN users u ON u.id = e.user_id
+        WHERE e.family_id = ?
+        ORDER BY e.is_primary DESC, e.id DESC
+        """,
+        (family_id,),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/families/<int:family_id>/care-reminders", methods=["GET"])
+def list_care_reminders(family_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+    db = get_db()
+    reminders = []
+
+    latest_status = db.execute(
+        "SELECT created_at FROM family_status_updates WHERE family_id = ? ORDER BY id DESC LIMIT 1",
+        (family_id,),
+    ).fetchone()
+    if latest_status:
+        last = datetime.fromisoformat(latest_status["created_at"])
+        idle_days = (datetime.now(timezone.utc) - last).days
+        if idle_days >= 3:
+            reminders.append(
+                {
+                    "type": "low_interaction",
+                    "title": "Family has been quiet recently",
+                    "message": f"No status update in {idle_days} day(s), send a quick check-in.",
+                    "severity": "medium",
+                }
+            )
+    else:
+        reminders.append(
+            {
+                "type": "no_status_yet",
+                "title": "No check-in status yet",
+                "message": "Create your first family status update to start daily connection.",
+                "severity": "low",
+            }
+        )
+
+    today = date.today()
+    birthday_rows = db.execute(
+        "SELECT birthday, notify_days_before FROM birthday_reminders WHERE family_id = ? AND enabled = 1",
+        (family_id,),
+    ).fetchall()
+    for row in birthday_rows:
+        try:
+            bday = datetime.strptime(row["birthday"], "%Y-%m-%d").date()
+        except ValueError:
+            continue
+        this_year = date(today.year, bday.month, bday.day)
+        if this_year < today:
+            this_year = date(today.year + 1, bday.month, bday.day)
+        days_left = (this_year - today).days
+        if days_left <= int(row["notify_days_before"]):
+            reminders.append(
+                {
+                    "type": "birthday_soon",
+                    "title": "Upcoming family birthday",
+                    "message": f"A birthday is coming in {days_left} day(s).",
+                    "severity": "high" if days_left <= 1 else "medium",
+                }
+            )
+
+    primary_contacts = db.execute(
+        "SELECT COUNT(1) AS c FROM emergency_contacts WHERE family_id = ? AND is_primary = 1",
+        (family_id,),
+    ).fetchone()
+    if int(primary_contacts["c"]) == 0:
+        reminders.append(
+            {
+                "type": "missing_primary_contact",
+                "title": "Emergency card incomplete",
+                "message": "No primary emergency contact set for this family.",
+                "severity": "medium",
+            }
+        )
+
+    return jsonify(reminders)
 
 
 with app.app_context():

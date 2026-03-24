@@ -8,6 +8,7 @@ backend/*.db
 backend/*.sqlite3
 backend/.env
 backend/.pytest_cache/
+backend/uploads/
 
 # Flutter/mobile
 mobile/.dart_tool/

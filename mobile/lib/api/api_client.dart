@@ -1,9 +1,16 @@
 import 'dart:convert';
 
 import 'package:family_mobile/models/daily_question.dart';
+import 'package:family_mobile/models/daily_answer.dart';
+import 'package:family_mobile/models/activity_item.dart';
 import 'package:family_mobile/models/family.dart';
 import 'package:family_mobile/models/photo.dart';
 import 'package:family_mobile/models/birthday_reminder.dart';
+import 'package:family_mobile/models/photo_comment.dart';
+import 'package:family_mobile/models/status_update.dart';
+import 'package:family_mobile/models/voice_message.dart';
+import 'package:family_mobile/models/emergency_contact.dart';
+import 'package:family_mobile/models/care_reminder.dart';
 import 'package:http/http.dart' as http;
 
 class ApiClient {
@@ -84,6 +91,34 @@ class ApiClient {
     _ensureSuccess(response);
   }
 
+  Future<void> createDailyAnswer({
+    required String token,
+    required int questionId,
+    required String answerText,
+  }) async {
+    final uri = Uri.parse('$baseUrl/daily-answers');
+    final response = await http.post(
+      uri,
+      headers: _authHeaders(token),
+      body: jsonEncode({
+        'question_id': questionId,
+        'answer_text': answerText,
+      }),
+    );
+    _ensureSuccess(response);
+  }
+
+  Future<List<DailyAnswer>> getDailyAnswers({
+    required String token,
+    required int questionId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/daily-questions/$questionId/answers');
+    final response = await http.get(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+    final data = jsonDecode(response.body) as List<dynamic>;
+    return data.map((e) => DailyAnswer.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
   Future<void> createPhoto({
     required String token,
     required int familyId,
@@ -100,6 +135,23 @@ class ApiClient {
         'caption': caption,
       }),
     );
+    _ensureSuccess(response);
+  }
+
+  Future<void> uploadPhoto({
+    required String token,
+    required int familyId,
+    required String filePath,
+    required String caption,
+  }) async {
+    final uri = Uri.parse('$baseUrl/photos/upload');
+    final request = http.MultipartRequest('POST', uri);
+    request.headers.addAll({'Authorization': 'Bearer $token'});
+    request.fields['family_id'] = '$familyId';
+    request.fields['caption'] = caption;
+    request.files.add(await http.MultipartFile.fromPath('file', filePath));
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
     _ensureSuccess(response);
   }
 
@@ -133,6 +185,185 @@ class ApiClient {
     return data.map((e) => BirthdayReminder.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  Future<void> updateBirthdayReminder({
+    required String token,
+    required int reminderId,
+    required String birthday,
+    required int notifyDaysBefore,
+    required bool enabled,
+  }) async {
+    final uri = Uri.parse('$baseUrl/birthday-reminders/$reminderId');
+    final response = await http.patch(
+      uri,
+      headers: _authHeaders(token),
+      body: jsonEncode({
+        'birthday': birthday,
+        'notify_days_before': notifyDaysBefore,
+        'enabled': enabled,
+      }),
+    );
+    _ensureSuccess(response);
+  }
+
+  Future<void> deleteBirthdayReminder({
+    required String token,
+    required int reminderId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/birthday-reminders/$reminderId');
+    final response = await http.delete(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+  }
+
+  Future<void> createStatusUpdate({
+    required String token,
+    required int familyId,
+    required String statusCode,
+    required String note,
+  }) async {
+    final uri = Uri.parse('$baseUrl/families/$familyId/status-updates');
+    final response = await http.post(
+      uri,
+      headers: _authHeaders(token),
+      body: jsonEncode({'status_code': statusCode, 'note': note}),
+    );
+    _ensureSuccess(response);
+  }
+
+  Future<List<StatusUpdate>> getStatusUpdates({
+    required String token,
+    required int familyId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/families/$familyId/status-updates');
+    final response = await http.get(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+    final data = jsonDecode(response.body) as List<dynamic>;
+    return data.map((e) => StatusUpdate.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> createVoiceMessage({
+    required String token,
+    required int familyId,
+    required String title,
+    required String audioUrl,
+    required int durationSeconds,
+  }) async {
+    final uri = Uri.parse('$baseUrl/families/$familyId/voice-messages');
+    final response = await http.post(
+      uri,
+      headers: _authHeaders(token),
+      body: jsonEncode({
+        'title': title,
+        'audio_url': audioUrl,
+        'duration_seconds': durationSeconds,
+      }),
+    );
+    _ensureSuccess(response);
+  }
+
+  Future<void> uploadVoiceMessage({
+    required String token,
+    required int familyId,
+    required String title,
+    required String filePath,
+    required int durationSeconds,
+  }) async {
+    final uri = Uri.parse('$baseUrl/families/$familyId/voice-messages/upload');
+    final request = http.MultipartRequest('POST', uri);
+    request.headers.addAll({'Authorization': 'Bearer $token'});
+    request.fields['title'] = title;
+    request.fields['duration_seconds'] = '$durationSeconds';
+    request.files.add(await http.MultipartFile.fromPath('file', filePath));
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+    _ensureSuccess(response);
+  }
+
+  Future<List<VoiceMessage>> getVoiceMessages({
+    required String token,
+    required int familyId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/families/$familyId/voice-messages');
+    final response = await http.get(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+    final data = jsonDecode(response.body) as List<dynamic>;
+    return data.map((e) {
+      final json = Map<String, dynamic>.from(e as Map<String, dynamic>);
+      json['audio_url'] = _resolveImageUrl(json['audio_url'] as String);
+      return VoiceMessage.fromJson(json);
+    }).toList();
+  }
+
+  Future<void> updateVoiceMessageTitle({
+    required String token,
+    required int messageId,
+    required String title,
+  }) async {
+    final uri = Uri.parse('$baseUrl/voice-messages/$messageId');
+    final response = await http.patch(
+      uri,
+      headers: _authHeaders(token),
+      body: jsonEncode({'title': title}),
+    );
+    _ensureSuccess(response);
+  }
+
+  Future<void> deleteVoiceMessage({
+    required String token,
+    required int messageId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/voice-messages/$messageId');
+    final response = await http.delete(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+  }
+
+  Future<void> createEmergencyContact({
+    required String token,
+    required int familyId,
+    required String contactName,
+    required String relation,
+    required String phone,
+    required String city,
+    required String medicalNotes,
+    required bool isPrimary,
+  }) async {
+    final uri = Uri.parse('$baseUrl/families/$familyId/emergency-contacts');
+    final response = await http.post(
+      uri,
+      headers: _authHeaders(token),
+      body: jsonEncode({
+        'contact_name': contactName,
+        'relation': relation,
+        'phone': phone,
+        'city': city,
+        'medical_notes': medicalNotes,
+        'is_primary': isPrimary,
+      }),
+    );
+    _ensureSuccess(response);
+  }
+
+  Future<List<EmergencyContact>> getEmergencyContacts({
+    required String token,
+    required int familyId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/families/$familyId/emergency-contacts');
+    final response = await http.get(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+    final data = jsonDecode(response.body) as List<dynamic>;
+    return data.map((e) => EmergencyContact.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<CareReminder>> getCareReminders({
+    required String token,
+    required int familyId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/families/$familyId/care-reminders');
+    final response = await http.get(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+    final data = jsonDecode(response.body) as List<dynamic>;
+    return data.map((e) => CareReminder.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
   Future<List<DailyQuestion>> getDailyQuestions({
     required String token,
     required int familyId,
@@ -144,6 +375,17 @@ class ApiClient {
     return data.map((e) => DailyQuestion.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  Future<List<ActivityItem>> getActivities({
+    required String token,
+    required int familyId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/families/$familyId/activities');
+    final response = await http.get(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+    final data = jsonDecode(response.body) as List<dynamic>;
+    return data.map((e) => ActivityItem.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
   Future<List<Photo>> getPhotos({
     required String token,
     required int familyId,
@@ -152,7 +394,81 @@ class ApiClient {
     final response = await http.get(uri, headers: _authHeaders(token));
     _ensureSuccess(response);
     final data = jsonDecode(response.body) as List<dynamic>;
-    return data.map((e) => Photo.fromJson(e as Map<String, dynamic>)).toList();
+    return data.map((e) {
+      final json = Map<String, dynamic>.from(e as Map<String, dynamic>);
+      json['image_url'] = _resolveImageUrl(json['image_url'] as String);
+      return Photo.fromJson(json);
+    }).toList();
+  }
+
+  Future<void> likePhoto({
+    required String token,
+    required int photoId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/photos/$photoId/likes');
+    final response = await http.post(
+      uri,
+      headers: _authHeaders(token),
+      body: '{}',
+    );
+    _ensureSuccess(response);
+  }
+
+  Future<void> unlikePhoto({
+    required String token,
+    required int photoId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/photos/$photoId/likes');
+    final response = await http.delete(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+  }
+
+  Future<void> commentPhoto({
+    required String token,
+    required int photoId,
+    required String content,
+  }) async {
+    final uri = Uri.parse('$baseUrl/photos/$photoId/comments');
+    final response = await http.post(
+      uri,
+      headers: _authHeaders(token),
+      body: jsonEncode({'content': content}),
+    );
+    _ensureSuccess(response);
+  }
+
+  Future<void> deletePhoto({
+    required String token,
+    required int photoId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/photos/$photoId');
+    final response = await http.delete(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+  }
+
+  Future<void> updatePhotoCaption({
+    required String token,
+    required int photoId,
+    required String caption,
+  }) async {
+    final uri = Uri.parse('$baseUrl/photos/$photoId');
+    final response = await http.patch(
+      uri,
+      headers: _authHeaders(token),
+      body: jsonEncode({'caption': caption}),
+    );
+    _ensureSuccess(response);
+  }
+
+  Future<List<PhotoComment>> getPhotoComments({
+    required String token,
+    required int photoId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/photos/$photoId/comments');
+    final response = await http.get(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+    final data = jsonDecode(response.body) as List<dynamic>;
+    return data.map((e) => PhotoComment.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Map<String, String> _authHeaders(String token) {
@@ -167,5 +483,15 @@ class ApiClient {
       return;
     }
     throw Exception('API ${response.statusCode}: ${response.body}');
+  }
+
+  String _resolveImageUrl(String imageUrl) {
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      return imageUrl;
+    }
+    if (imageUrl.startsWith('/')) {
+      return '$baseUrl$imageUrl';
+    }
+    return '$baseUrl/$imageUrl';
   }
 }
