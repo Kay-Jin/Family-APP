@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:family_mobile/models/daily_question.dart';
 import 'package:family_mobile/models/family.dart';
 import 'package:family_mobile/models/photo.dart';
+import 'package:family_mobile/models/birthday_reminder.dart';
 import 'package:http/http.dart' as http;
 
 class ApiClient {
@@ -38,7 +39,7 @@ class ApiClient {
     return Family.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  Future<void> joinFamily({
+  Future<Family> joinFamily({
     required String token,
     required String inviteCode,
   }) async {
@@ -49,6 +50,87 @@ class ApiClient {
       body: jsonEncode({'invite_code': inviteCode}),
     );
     _ensureSuccess(response);
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final familyJson = data['family'] as Map<String, dynamic>;
+    return Family.fromJson(familyJson);
+  }
+
+  Future<Family> getFamily({
+    required String token,
+    required int familyId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/families/$familyId');
+    final response = await http.get(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+    return Family.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<void> createDailyQuestion({
+    required String token,
+    required int familyId,
+    required String questionDate,
+    required String questionText,
+  }) async {
+    final uri = Uri.parse('$baseUrl/daily-questions');
+    final response = await http.post(
+      uri,
+      headers: _authHeaders(token),
+      body: jsonEncode({
+        'family_id': familyId,
+        'question_date': questionDate,
+        'question_text': questionText,
+      }),
+    );
+    _ensureSuccess(response);
+  }
+
+  Future<void> createPhoto({
+    required String token,
+    required int familyId,
+    required String imageUrl,
+    required String caption,
+  }) async {
+    final uri = Uri.parse('$baseUrl/photos');
+    final response = await http.post(
+      uri,
+      headers: _authHeaders(token),
+      body: jsonEncode({
+        'family_id': familyId,
+        'image_url': imageUrl,
+        'caption': caption,
+      }),
+    );
+    _ensureSuccess(response);
+  }
+
+  Future<void> createBirthdayReminder({
+    required String token,
+    required int familyId,
+    required String birthday,
+    required int notifyDaysBefore,
+  }) async {
+    final uri = Uri.parse('$baseUrl/birthday-reminders');
+    final response = await http.post(
+      uri,
+      headers: _authHeaders(token),
+      body: jsonEncode({
+        'family_id': familyId,
+        'birthday': birthday,
+        'notify_days_before': notifyDaysBefore,
+      }),
+    );
+    _ensureSuccess(response);
+  }
+
+  Future<List<BirthdayReminder>> getBirthdayReminders({
+    required String token,
+    required int familyId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/families/$familyId/birthday-reminders');
+    final response = await http.get(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+    final data = jsonDecode(response.body) as List<dynamic>;
+    return data.map((e) => BirthdayReminder.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<List<DailyQuestion>> getDailyQuestions({

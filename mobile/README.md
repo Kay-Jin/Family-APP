@@ -40,3 +40,22 @@ If testing on a real phone, change it to your computer LAN IP, e.g.:
   - comments/likes
   - birthday reminder create/list
 - Add routing and app shell
+
+## 5) If Android build times out on network
+
+When your network can reach Gradle/Maven reliably, run cache warmup once:
+
+```powershell
+cd mobile
+powershell -ExecutionPolicy Bypass -File .\tools\warmup_android_cache.ps1
+```
+
+Then switch back to normal network and run:
+
+```powershell
+flutter run -d emulator-5554
+```
+
+You can also double-click this file in Explorer:
+
+- `mobile/tools/warmup_android_cache.bat`

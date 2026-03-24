@@ -2,6 +2,7 @@ import 'package:family_mobile/api/api_client.dart';
 import 'package:family_mobile/models/daily_question.dart';
 import 'package:family_mobile/models/family.dart';
 import 'package:family_mobile/models/photo.dart';
+import 'package:family_mobile/models/birthday_reminder.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -17,6 +18,7 @@ class AppState extends ChangeNotifier {
   Family? family;
   List<DailyQuestion> dailyQuestions = [];
   List<Photo> photos = [];
+  List<BirthdayReminder> birthdayReminders = [];
 
   bool get isLoggedIn => token != null;
 
@@ -24,6 +26,14 @@ class AppState extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     token = prefs.getString('token');
     userId = prefs.getInt('user_id');
+    final familyId = prefs.getInt('family_id');
+    if (token != null && familyId != null) {
+      try {
+        family = await _apiClient.getFamily(token: token!, familyId: familyId);
+      } catch (_) {
+        family = null;
+      }
+    }
     isLoading = false;
     notifyListeners();
   }
@@ -43,6 +53,8 @@ class AppState extends ChangeNotifier {
     if (token == null) return;
     await _runBusy(() async {
       family = await _apiClient.createFamily(token: token!, familyName: familyName);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('family_id', family!.id);
       await refreshHomeData();
     });
   }
@@ -50,7 +62,10 @@ class AppState extends ChangeNotifier {
   Future<void> joinFamily(String inviteCode) async {
     if (token == null) return;
     await _runBusy(() async {
-      await _apiClient.joinFamily(token: token!, inviteCode: inviteCode);
+      family = await _apiClient.joinFamily(token: token!, inviteCode: inviteCode);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('family_id', family!.id);
+      await refreshHomeData();
     });
   }
 
@@ -59,6 +74,55 @@ class AppState extends ChangeNotifier {
     await _runBusy(() async {
       dailyQuestions = await _apiClient.getDailyQuestions(token: token!, familyId: family!.id);
       photos = await _apiClient.getPhotos(token: token!, familyId: family!.id);
+      birthdayReminders = await _apiClient.getBirthdayReminders(token: token!, familyId: family!.id);
+    });
+  }
+
+  Future<void> addDailyQuestion({
+    required String questionDate,
+    required String questionText,
+  }) async {
+    if (token == null || family == null) return;
+    await _runBusy(() async {
+      await _apiClient.createDailyQuestion(
+        token: token!,
+        familyId: family!.id,
+        questionDate: questionDate,
+        questionText: questionText,
+      );
+      await refreshHomeData();
+    });
+  }
+
+  Future<void> addPhoto({
+    required String imageUrl,
+    required String caption,
+  }) async {
+    if (token == null || family == null) return;
+    await _runBusy(() async {
+      await _apiClient.createPhoto(
+        token: token!,
+        familyId: family!.id,
+        imageUrl: imageUrl,
+        caption: caption,
+      );
+      await refreshHomeData();
+    });
+  }
+
+  Future<void> addBirthdayReminder({
+    required String birthday,
+    required int notifyDaysBefore,
+  }) async {
+    if (token == null || family == null) return;
+    await _runBusy(() async {
+      await _apiClient.createBirthdayReminder(
+        token: token!,
+        familyId: family!.id,
+        birthday: birthday,
+        notifyDaysBefore: notifyDaysBefore,
+      );
+      await refreshHomeData();
     });
   }
 
@@ -68,9 +132,11 @@ class AppState extends ChangeNotifier {
     family = null;
     dailyQuestions = [];
     photos = [];
+    birthdayReminders = [];
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('token');
     await prefs.remove('user_id');
+    await prefs.remove('family_id');
     notifyListeners();
   }
 

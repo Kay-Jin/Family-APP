@@ -233,7 +233,10 @@ def join_family():
     if not invite_code:
         return jsonify({"error": "invite_code is required"}), 400
     db = get_db()
-    family = db.execute("SELECT id FROM families WHERE invite_code = ?", (invite_code,)).fetchone()
+    family = db.execute(
+        "SELECT id, name, invite_code, owner_user_id FROM families WHERE invite_code = ?",
+        (invite_code,),
+    ).fetchone()
     if family is None:
         return jsonify({"error": "family not found"}), 404
     try:
@@ -242,9 +245,48 @@ def join_family():
             (family["id"], caller_user_id, now_iso()),
         )
         db.commit()
-        return jsonify({"message": "joined", "family_id": family["id"]})
+        return jsonify(
+            {
+                "message": "joined",
+                "family_id": family["id"],
+                "family": {
+                    "id": family["id"],
+                    "name": family["name"],
+                    "invite_code": family["invite_code"],
+                    "owner_user_id": family["owner_user_id"],
+                },
+            }
+        )
     except sqlite3.IntegrityError:
-        return jsonify({"message": "already joined", "family_id": family["id"]})
+        return jsonify(
+            {
+                "message": "already joined",
+                "family_id": family["id"],
+                "family": {
+                    "id": family["id"],
+                    "name": family["name"],
+                    "invite_code": family["invite_code"],
+                    "owner_user_id": family["owner_user_id"],
+                },
+            }
+        )
+
+
+@app.route("/families/<int:family_id>", methods=["GET"])
+def get_family(family_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+    db = get_db()
+    family = db.execute(
+        "SELECT id, name, invite_code, owner_user_id FROM families WHERE id = ?",
+        (family_id,),
+    ).fetchone()
+    if family is None:
+        return jsonify({"error": "family not found"}), 404
+    return jsonify(dict(family))
 
 
 @app.route("/families/<int:family_id>/members", methods=["GET"])
@@ -456,6 +498,26 @@ def birthday_today():
     ).fetchall()
     due = [dict(r) for r in rows if r["birthday"][5:] == today]
     return jsonify(due)
+
+
+@app.route("/families/<int:family_id>/birthday-reminders", methods=["GET"])
+def list_birthday_reminders(family_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT id, family_id, user_id, birthday, notify_days_before, enabled
+        FROM birthday_reminders
+        WHERE family_id = ?
+        ORDER BY id DESC
+        """,
+        (family_id,),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
 
 
 with app.app_context():
