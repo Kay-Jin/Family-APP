@@ -59,6 +59,38 @@ def test_emergency_contacts_and_care_reminders_smoke(client, family_id, user_tok
     assert not any(x.get("type") == "missing_primary_contact" for x in reminders)
 
 
+def test_medical_card_upsert_and_reminder_smoke(client, family_id, user_token_1):
+    r0 = client.get(f"/families/{family_id}/medical-card", headers=_auth_headers(user_token_1))
+    assert r0.status_code == 200
+    data0 = r0.get_json()
+    assert data0["family_id"] == family_id
+
+    r1 = client.put(
+        f"/families/{family_id}/medical-card",
+        json={
+            "allergies": "Penicillin",
+            "medications": "Aspirin",
+            "hospitals": "City Hospital",
+            "other_notes": "N/A",
+            "accompaniment_requested": True,
+            "accompaniment_note": "Need someone to accompany on Friday.",
+        },
+        headers=_auth_headers(user_token_1),
+    )
+    assert r1.status_code == 200
+
+    r2 = client.get(f"/families/{family_id}/medical-card", headers=_auth_headers(user_token_1))
+    assert r2.status_code == 200
+    data2 = r2.get_json()
+    assert data2["allergies"] == "Penicillin"
+    assert int(data2["accompaniment_requested"]) == 1
+
+    r3 = client.get(f"/families/{family_id}/care-reminders", headers=_auth_headers(user_token_1))
+    assert r3.status_code == 200
+    reminders = r3.get_json()
+    assert any(x.get("type") == "accompaniment_requested" for x in reminders)
+
+
 def test_voice_message_create_list_rename_delete_smoke(client, family_id, user_token_1, user_token_2):
     r1 = client.post(
         f"/families/{family_id}/voice-messages",

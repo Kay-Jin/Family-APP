@@ -133,6 +133,18 @@ def init_db():
             is_primary INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS family_medical_cards (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            family_id INTEGER NOT NULL UNIQUE,
+            updated_by_user_id INTEGER NOT NULL,
+            allergies TEXT,
+            medications TEXT,
+            hospitals TEXT,
+            other_notes TEXT,
+            accompaniment_requested INTEGER NOT NULL DEFAULT 0,
+            accompaniment_note TEXT,
+            updated_at TEXT NOT NULL
+        );
         """
     )
     db.commit()
@@ -1193,6 +1205,120 @@ def list_emergency_contacts(family_id: int):
     return jsonify([dict(r) for r in rows])
 
 
+@app.route("/families/<int:family_id>/medical-card", methods=["GET"])
+def get_medical_card(family_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+    db = get_db()
+    row = db.execute(
+        """
+        SELECT
+            id,
+            family_id,
+            updated_by_user_id,
+            COALESCE(allergies, '') AS allergies,
+            COALESCE(medications, '') AS medications,
+            COALESCE(hospitals, '') AS hospitals,
+            COALESCE(other_notes, '') AS other_notes,
+            accompaniment_requested,
+            COALESCE(accompaniment_note, '') AS accompaniment_note,
+            updated_at
+        FROM family_medical_cards
+        WHERE family_id = ?
+        """,
+        (family_id,),
+    ).fetchone()
+    if row is None:
+        return jsonify(
+            {
+                "id": None,
+                "family_id": family_id,
+                "updated_by_user_id": None,
+                "allergies": "",
+                "medications": "",
+                "hospitals": "",
+                "other_notes": "",
+                "accompaniment_requested": 0,
+                "accompaniment_note": "",
+                "updated_at": None,
+            }
+        )
+    return jsonify(dict(row))
+
+
+@app.route("/families/<int:family_id>/medical-card", methods=["PUT"])
+def upsert_medical_card(family_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+    payload = request.get_json(force=True)
+    allergies = (payload.get("allergies") or "").strip()
+    medications = (payload.get("medications") or "").strip()
+    hospitals = (payload.get("hospitals") or "").strip()
+    other_notes = (payload.get("other_notes") or "").strip()
+    accompaniment_requested = 1 if bool(payload.get("accompaniment_requested", False)) else 0
+    accompaniment_note = (payload.get("accompaniment_note") or "").strip()
+    db = get_db()
+    existing = db.execute("SELECT id FROM family_medical_cards WHERE family_id = ?", (family_id,)).fetchone()
+    if existing is None:
+        db.execute(
+            """
+            INSERT INTO family_medical_cards
+                (family_id, updated_by_user_id, allergies, medications, hospitals, other_notes,
+                 accompaniment_requested, accompaniment_note, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                family_id,
+                caller_user_id,
+                allergies,
+                medications,
+                hospitals,
+                other_notes,
+                accompaniment_requested,
+                accompaniment_note,
+                now_iso(),
+            ),
+        )
+        db.commit()
+        card_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+    else:
+        card_id = existing["id"]
+        db.execute(
+            """
+            UPDATE family_medical_cards
+            SET
+                updated_by_user_id = ?,
+                allergies = ?,
+                medications = ?,
+                hospitals = ?,
+                other_notes = ?,
+                accompaniment_requested = ?,
+                accompaniment_note = ?,
+                updated_at = ?
+            WHERE family_id = ?
+            """,
+            (
+                caller_user_id,
+                allergies,
+                medications,
+                hospitals,
+                other_notes,
+                accompaniment_requested,
+                accompaniment_note,
+                now_iso(),
+                family_id,
+            ),
+        )
+        db.commit()
+    return jsonify({"message": "ok", "id": card_id, "family_id": family_id})
+
+
 @app.route("/families/<int:family_id>/care-reminders", methods=["GET"])
 def list_care_reminders(family_id: int):
     caller_user_id, err = require_auth()
@@ -1264,6 +1390,21 @@ def list_care_reminders(family_id: int):
                 "title": "Emergency card incomplete",
                 "message": "No primary emergency contact set for this family.",
                 "severity": "medium",
+            }
+        )
+
+    card = db.execute(
+        "SELECT accompaniment_requested, COALESCE(accompaniment_note, '') AS note FROM family_medical_cards WHERE family_id = ?",
+        (family_id,),
+    ).fetchone()
+    if card is not None and int(card["accompaniment_requested"]) == 1:
+        note = (card["note"] or "").strip()
+        reminders.append(
+            {
+                "type": "accompaniment_requested",
+                "title": "Medical accompaniment requested",
+                "message": note if note else "A family member requested help to accompany a medical visit.",
+                "severity": "high",
             }
         )
 

@@ -40,7 +40,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   final _contactPhoneController = TextEditingController(text: '13800000000');
   final _contactCityController = TextEditingController(text: '上海');
   final _contactMedicalController = TextEditingController();
+  final _allergiesController = TextEditingController();
+  final _medicationsController = TextEditingController();
+  final _hospitalsController = TextEditingController();
+  final _medicalOtherController = TextEditingController();
+  final _accompanimentNoteController = TextEditingController();
   bool _contactPrimary = true;
+  bool _accompanimentRequested = false;
+  bool _medicalPrefilled = false;
   String _selectedStatusCode = 'home_safe';
   final ImagePicker _imagePicker = ImagePicker();
   String? _pickedImagePath;
@@ -109,6 +116,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _contactPhoneController.dispose();
     _contactCityController.dispose();
     _contactMedicalController.dispose();
+    _allergiesController.dispose();
+    _medicationsController.dispose();
+    _hospitalsController.dispose();
+    _medicalOtherController.dispose();
+    _accompanimentNoteController.dispose();
     super.dispose();
   }
 
@@ -1551,6 +1563,69 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               subtitle: Text('${c.phone} · ${c.city}'),
               trailing: c.isPrimary ? const Icon(Icons.star, color: Colors.amber) : null,
             )),
+        const Divider(height: 28),
+        Text('Medical Card', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Builder(
+          builder: (context) {
+            final card = appState.medicalCard;
+            if (!_medicalPrefilled && card != null) {
+              _allergiesController.text = card.allergies;
+              _medicationsController.text = card.medications;
+              _hospitalsController.text = card.hospitals;
+              _medicalOtherController.text = card.otherNotes;
+              _accompanimentRequested = card.accompanimentRequested;
+              _accompanimentNoteController.text = card.accompanimentNote;
+              _medicalPrefilled = true;
+            }
+            return const SizedBox.shrink();
+          },
+        ),
+        TextField(
+          controller: _allergiesController,
+          decoration: const InputDecoration(labelText: 'Allergies'),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _medicationsController,
+          decoration: const InputDecoration(labelText: 'Common Medications'),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _hospitalsController,
+          decoration: const InputDecoration(labelText: 'Common Hospitals'),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _medicalOtherController,
+          decoration: const InputDecoration(labelText: 'Other Notes'),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Request accompaniment'),
+          value: _accompanimentRequested,
+          onChanged: appState.isBusy ? null : (v) => setState(() => _accompanimentRequested = v),
+        ),
+        if (_accompanimentRequested) ...[
+          const SizedBox(height: 8),
+          TextField(
+            controller: _accompanimentNoteController,
+            decoration: const InputDecoration(labelText: 'Accompaniment note'),
+          ),
+        ],
+        OutlinedButton(
+          onPressed: appState.isBusy
+              ? null
+              : () => appState.upsertMedicalCard(
+                    allergies: _allergiesController.text.trim(),
+                    medications: _medicationsController.text.trim(),
+                    hospitals: _hospitalsController.text.trim(),
+                    otherNotes: _medicalOtherController.text.trim(),
+                    accompanimentRequested: _accompanimentRequested,
+                    accompanimentNote: _accompanimentNoteController.text.trim(),
+                  ),
+          child: const Text('Save Medical Card'),
+        ),
         const Divider(height: 28),
         Text('Smart Care Reminders', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),

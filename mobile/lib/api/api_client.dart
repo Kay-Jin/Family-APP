@@ -11,6 +11,7 @@ import 'package:family_mobile/models/status_update.dart';
 import 'package:family_mobile/models/voice_message.dart';
 import 'package:family_mobile/models/emergency_contact.dart';
 import 'package:family_mobile/models/care_reminder.dart';
+import 'package:family_mobile/models/medical_card.dart';
 import 'package:http/http.dart' as http;
 
 class ApiClient {
@@ -362,6 +363,42 @@ class ApiClient {
     _ensureSuccess(response);
     final data = jsonDecode(response.body) as List<dynamic>;
     return data.map((e) => CareReminder.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<MedicalCard> getMedicalCard({
+    required String token,
+    required int familyId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/families/$familyId/medical-card');
+    final response = await http.get(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+    return MedicalCard.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<void> upsertMedicalCard({
+    required String token,
+    required int familyId,
+    required String allergies,
+    required String medications,
+    required String hospitals,
+    required String otherNotes,
+    required bool accompanimentRequested,
+    required String accompanimentNote,
+  }) async {
+    final uri = Uri.parse('$baseUrl/families/$familyId/medical-card');
+    final response = await http.put(
+      uri,
+      headers: _authHeaders(token),
+      body: jsonEncode({
+        'allergies': allergies,
+        'medications': medications,
+        'hospitals': hospitals,
+        'other_notes': otherNotes,
+        'accompaniment_requested': accompanimentRequested,
+        'accompaniment_note': accompanimentNote,
+      }),
+    );
+    _ensureSuccess(response);
   }
 
   Future<List<DailyQuestion>> getDailyQuestions({

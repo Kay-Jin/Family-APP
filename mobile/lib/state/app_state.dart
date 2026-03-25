@@ -10,6 +10,7 @@ import 'package:family_mobile/models/status_update.dart';
 import 'package:family_mobile/models/voice_message.dart';
 import 'package:family_mobile/models/emergency_contact.dart';
 import 'package:family_mobile/models/care_reminder.dart';
+import 'package:family_mobile/models/medical_card.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -35,6 +36,7 @@ class AppState extends ChangeNotifier {
   List<StatusUpdate> statusUpdates = [];
   List<VoiceMessage> voiceMessages = [];
   List<EmergencyContact> emergencyContacts = [];
+  MedicalCard? medicalCard;
   List<CareReminder> careReminders = [];
   Map<int, List<PhotoComment>> photoComments = {};
   Map<int, List<DailyAnswer>> dailyAnswers = {};
@@ -364,6 +366,7 @@ class AppState extends ChangeNotifier {
     statusUpdates = await _apiClient.getStatusUpdates(token: token!, familyId: family!.id);
     voiceMessages = await _apiClient.getVoiceMessages(token: token!, familyId: family!.id);
     emergencyContacts = await _apiClient.getEmergencyContacts(token: token!, familyId: family!.id);
+    medicalCard = await _apiClient.getMedicalCard(token: token!, familyId: family!.id);
     careReminders = await _apiClient.getCareReminders(token: token!, familyId: family!.id);
   }
 
@@ -501,6 +504,30 @@ class AppState extends ChangeNotifier {
         city: city,
         medicalNotes: medicalNotes,
         isPrimary: isPrimary,
+      );
+      await _refreshHomeDataInternal();
+    });
+  }
+
+  Future<void> upsertMedicalCard({
+    required String allergies,
+    required String medications,
+    required String hospitals,
+    required String otherNotes,
+    required bool accompanimentRequested,
+    required String accompanimentNote,
+  }) async {
+    if (token == null || family == null) return;
+    await _runBusy(() async {
+      await _apiClient.upsertMedicalCard(
+        token: token!,
+        familyId: family!.id,
+        allergies: allergies,
+        medications: medications,
+        hospitals: hospitals,
+        otherNotes: otherNotes,
+        accompanimentRequested: accompanimentRequested,
+        accompanimentNote: accompanimentNote,
       );
       await _refreshHomeDataInternal();
     });
