@@ -4,6 +4,7 @@ Thumbs.db
 # Python backend
 backend/.venv/
 backend/__pycache__/
+backend/**/__pycache__/
 backend/*.db
 backend/*.sqlite3
 backend/.env
@@ -28,7 +29,9 @@ mobile/android/local.properties
 # Python
 backend/.venv/
 backend/__pycache__/
+backend/**/__pycache__/
 backend/*.pyc
+backend/**/*.pyc
 backend/family_app.db
 
 # Flutter / Dart
