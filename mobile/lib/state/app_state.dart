@@ -10,11 +10,15 @@ import 'package:family_mobile/models/status_update.dart';
 import 'package:family_mobile/models/voice_message.dart';
 import 'package:family_mobile/models/emergency_contact.dart';
 import 'package:family_mobile/models/care_reminder.dart';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AppState extends ChangeNotifier {
   final ApiClient _apiClient = ApiClient(baseUrl: _resolveBaseUrl());
+
+  static const _pendingVoiceUploadKey = 'pending_voice_upload_v1';
+  static const _pendingVoiceUploadErrorKey = 'pending_voice_upload_error_v1';
 
   bool isLoading = true;
   bool isBusy = false;
@@ -45,6 +49,22 @@ class AppState extends ChangeNotifier {
     token = prefs.getString('token');
     userId = prefs.getInt('user_id');
     localeCode = prefs.getString('locale_code');
+
+    final pendingJson = prefs.getString(_pendingVoiceUploadKey);
+    if (pendingJson != null && pendingJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(pendingJson);
+        if (decoded is Map<String, dynamic>) {
+          pendingVoiceUpload = decoded;
+        } else if (decoded is Map) {
+          pendingVoiceUpload = Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {
+        pendingVoiceUpload = null;
+      }
+    }
+    voiceUploadError = prefs.getString(_pendingVoiceUploadErrorKey);
+
     final familyId = prefs.getInt('family_id');
     if (token != null && familyId != null) {
       try {
@@ -55,6 +75,23 @@ class AppState extends ChangeNotifier {
     }
     isLoading = false;
     notifyListeners();
+  }
+
+  Future<void> _persistPendingVoiceUpload() async {
+    if (pendingVoiceUpload == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_pendingVoiceUploadKey, jsonEncode(pendingVoiceUpload));
+    if (voiceUploadError == null || voiceUploadError!.isEmpty) {
+      await prefs.remove(_pendingVoiceUploadErrorKey);
+    } else {
+      await prefs.setString(_pendingVoiceUploadErrorKey, voiceUploadError!);
+    }
+  }
+
+  Future<void> _clearPendingVoiceUploadPersisted() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_pendingVoiceUploadKey);
+    await prefs.remove(_pendingVoiceUploadErrorKey);
   }
 
   Future<void> login(String wechatCode, String displayName) async {
@@ -289,6 +326,8 @@ class AppState extends ChangeNotifier {
     await prefs.remove('token');
     await prefs.remove('user_id');
     await prefs.remove('family_id');
+    await prefs.remove(_pendingVoiceUploadKey);
+    await prefs.remove(_pendingVoiceUploadErrorKey);
     notifyListeners();
   }
 
@@ -397,10 +436,12 @@ class AppState extends ChangeNotifier {
           'duration_seconds': durationSeconds,
         };
         voiceUploadError = lastError.toString();
+        await _persistPendingVoiceUpload();
         throw lastError;
       }
       pendingVoiceUpload = null;
       voiceUploadError = null;
+      await _clearPendingVoiceUploadPersisted();
       await _refreshHomeDataInternal();
     });
   }
