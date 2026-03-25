@@ -1257,6 +1257,27 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       children: [
         Text('Family Status Card', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: statusOptions
+              .map(
+                (s) => FilledButton.tonal(
+                  onPressed: appState.isBusy
+                      ? null
+                      : () async {
+                          setState(() => _selectedStatusCode = s.$1);
+                          await appState.addStatusUpdate(
+                            statusCode: s.$1,
+                            note: _statusNoteController.text.trim(),
+                          );
+                        },
+                  child: Text(s.$2),
+                ),
+              )
+              .toList(),
+        ),
+        const SizedBox(height: 10),
         DropdownButtonFormField<String>(
           value: _selectedStatusCode,
           items: statusOptions
