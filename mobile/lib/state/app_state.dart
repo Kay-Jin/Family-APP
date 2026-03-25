@@ -509,6 +509,42 @@ class AppState extends ChangeNotifier {
     });
   }
 
+  Future<void> updateEmergencyContact({
+    required int contactId,
+    required String contactName,
+    required String relation,
+    required String phone,
+    required String city,
+    required String medicalNotes,
+    required bool isPrimary,
+  }) async {
+    if (token == null || family == null) return;
+    await _runBusy(() async {
+      await _apiClient.updateEmergencyContact(
+        token: token!,
+        contactId: contactId,
+        contactName: contactName,
+        relation: relation,
+        phone: phone,
+        city: city,
+        medicalNotes: medicalNotes,
+        isPrimary: isPrimary,
+      );
+      await _refreshHomeDataInternal();
+    });
+  }
+
+  Future<void> removeEmergencyContact(int contactId) async {
+    if (token == null || family == null) return;
+    await _runBusy(() async {
+      await _apiClient.deleteEmergencyContact(
+        token: token!,
+        contactId: contactId,
+      );
+      await _refreshHomeDataInternal();
+    });
+  }
+
   Future<void> upsertMedicalCard({
     required String allergies,
     required String medications,

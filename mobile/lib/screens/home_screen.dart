@@ -1582,7 +1582,72 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               contentPadding: EdgeInsets.zero,
               title: Text('${c.contactName} (${c.relation})'),
               subtitle: Text('${c.phone} · ${c.city}'),
-              trailing: c.isPrimary ? const Icon(Icons.star, color: Colors.amber) : null,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (c.isPrimary) const Icon(Icons.star, color: Colors.amber),
+                  IconButton(
+                    onPressed: appState.isBusy
+                        ? null
+                        : () async {
+                            _contactNameController.text = c.contactName;
+                            _contactRelationController.text = c.relation;
+                            _contactPhoneController.text = c.phone;
+                            _contactCityController.text = c.city;
+                            _contactMedicalController.text = c.medicalNotes;
+                            setState(() => _contactPrimary = c.isPrimary);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Loaded into form. Edit then Save.')),
+                            );
+                          },
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                  IconButton(
+                    onPressed: appState.isBusy
+                        ? null
+                        : () async {
+                            await appState.updateEmergencyContact(
+                              contactId: c.id,
+                              contactName: c.contactName,
+                              relation: c.relation,
+                              phone: c.phone,
+                              city: c.city,
+                              medicalNotes: c.medicalNotes,
+                              isPrimary: true,
+                            );
+                          },
+                    icon: const Icon(Icons.star_outline),
+                  ),
+                  IconButton(
+                    onPressed: appState.isBusy
+                        ? null
+                        : () async {
+                            final ok = await showDialog<bool>(
+                              context: context,
+                              builder: (context) {
+                                return AlertDialog(
+                                  title: const Text('Delete Contact'),
+                                  content: const Text('Delete this emergency contact?'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context, false),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    FilledButton(
+                                      onPressed: () => Navigator.pop(context, true),
+                                      child: const Text('Delete'),
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+                            if (ok != true) return;
+                            await appState.removeEmergencyContact(c.id);
+                          },
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+                ],
+              ),
             )),
         const Divider(height: 28),
         Text('Medical Card', style: Theme.of(context).textTheme.titleMedium),

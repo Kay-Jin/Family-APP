@@ -354,6 +354,41 @@ class ApiClient {
     return data.map((e) => EmergencyContact.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  Future<void> updateEmergencyContact({
+    required String token,
+    required int contactId,
+    required String contactName,
+    required String relation,
+    required String phone,
+    required String city,
+    required String medicalNotes,
+    required bool isPrimary,
+  }) async {
+    final uri = Uri.parse('$baseUrl/emergency-contacts/$contactId');
+    final response = await http.patch(
+      uri,
+      headers: _authHeaders(token),
+      body: jsonEncode({
+        'contact_name': contactName,
+        'relation': relation,
+        'phone': phone,
+        'city': city,
+        'medical_notes': medicalNotes,
+        'is_primary': isPrimary,
+      }),
+    );
+    _ensureSuccess(response);
+  }
+
+  Future<void> deleteEmergencyContact({
+    required String token,
+    required int contactId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/emergency-contacts/$contactId');
+    final response = await http.delete(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+  }
+
   Future<List<CareReminder>> getCareReminders({
     required String token,
     required int familyId,

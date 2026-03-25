@@ -60,6 +60,7 @@ def test_emergency_contacts_and_care_reminders_smoke(client, family_id, user_tok
         headers=_auth_headers(user_token_1),
     )
     assert r1.status_code == 200
+    contact = r1.get_json()
 
     r2 = client.get(f"/families/{family_id}/emergency-contacts", headers=_auth_headers(user_token_1))
     assert r2.status_code == 200
@@ -67,10 +68,20 @@ def test_emergency_contacts_and_care_reminders_smoke(client, family_id, user_tok
     assert isinstance(contacts, list)
     assert any(c.get("is_primary") == 1 for c in contacts)
 
+    r_update = client.patch(
+        f"/emergency-contacts/{contact['id']}",
+        json={"city": "New City", "is_primary": True},
+        headers=_auth_headers(user_token_1),
+    )
+    assert r_update.status_code == 200
+
     r3 = client.get(f"/families/{family_id}/care-reminders", headers=_auth_headers(user_token_1))
     assert r3.status_code == 200
     reminders = r3.get_json()
     assert not any(x.get("type") == "missing_primary_contact" for x in reminders)
+
+    r_delete = client.delete(f"/emergency-contacts/{contact['id']}", headers=_auth_headers(user_token_1))
+    assert r_delete.status_code == 200
 
 
 def test_medical_card_upsert_and_reminder_smoke(client, family_id, user_token_1):

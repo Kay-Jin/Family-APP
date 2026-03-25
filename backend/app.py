@@ -1148,6 +1148,8 @@ def create_emergency_contact(family_id: int):
     if not contact_name or not relation or not phone:
         return jsonify({"error": "contact_name, relation, phone are required"}), 400
     db = get_db()
+    if is_primary == 1:
+        db.execute("UPDATE emergency_contacts SET is_primary = 0 WHERE family_id = ?", (family_id,))
     db.execute(
         """
         INSERT INTO emergency_contacts
@@ -1171,6 +1173,78 @@ def create_emergency_contact(family_id: int):
             "is_primary": is_primary,
         }
     )
+
+
+@app.route("/emergency-contacts/<int:contact_id>", methods=["PATCH"])
+def update_emergency_contact(contact_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    payload = request.get_json(force=True)
+    contact_name = (payload.get("contact_name") or "").strip()
+    relation = (payload.get("relation") or "").strip()
+    phone = (payload.get("phone") or "").strip()
+    city = (payload.get("city") or "").strip()
+    medical_notes = (payload.get("medical_notes") or "").strip()
+    is_primary = payload.get("is_primary")
+
+    db = get_db()
+    row = db.execute("SELECT id, family_id, user_id FROM emergency_contacts WHERE id = ?", (contact_id,)).fetchone()
+    if row is None:
+        return jsonify({"error": "emergency contact not found"}), 404
+    if not user_in_family(caller_user_id, row["family_id"]):
+        return jsonify({"error": "forbidden"}), 403
+    if caller_user_id != row["user_id"]:
+        return jsonify({"error": "only creator can edit"}), 403
+
+    fields = []
+    params = []
+    if contact_name:
+        fields.append("contact_name = ?")
+        params.append(contact_name)
+    if relation:
+        fields.append("relation = ?")
+        params.append(relation)
+    if phone:
+        fields.append("phone = ?")
+        params.append(phone)
+    fields.append("city = ?")
+    params.append(city)
+    fields.append("medical_notes = ?")
+    params.append(medical_notes)
+
+    if is_primary is not None:
+        primary_int = 1 if bool(is_primary) else 0
+        if primary_int == 1:
+            db.execute("UPDATE emergency_contacts SET is_primary = 0 WHERE family_id = ?", (row["family_id"],))
+        fields.append("is_primary = ?")
+        params.append(primary_int)
+
+    if not fields:
+        return jsonify({"error": "no fields to update"}), 400
+
+    params.append(contact_id)
+    db.execute(f"UPDATE emergency_contacts SET {', '.join(fields)} WHERE id = ?", params)
+    db.commit()
+    return jsonify({"message": "updated", "id": contact_id})
+
+
+@app.route("/emergency-contacts/<int:contact_id>", methods=["DELETE"])
+def delete_emergency_contact(contact_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    db = get_db()
+    row = db.execute("SELECT id, family_id, user_id FROM emergency_contacts WHERE id = ?", (contact_id,)).fetchone()
+    if row is None:
+        return jsonify({"error": "emergency contact not found"}), 404
+    if not user_in_family(caller_user_id, row["family_id"]):
+        return jsonify({"error": "forbidden"}), 403
+    if caller_user_id != row["user_id"]:
+        return jsonify({"error": "only creator can delete"}), 403
+    db.execute("DELETE FROM emergency_contacts WHERE id = ?", (contact_id,))
+    db.commit()
+    return jsonify({"message": "deleted", "id": contact_id})
 
 
 @app.route("/families/<int:family_id>/emergency-contacts", methods=["GET"])
