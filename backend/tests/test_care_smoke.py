@@ -26,6 +26,20 @@ def test_status_updates_smoke(client, family_id, user_token_1):
     assert any(i["id"] == created["id"] for i in items)
 
 
+def test_mood_keyword_reminder_smoke(client, family_id, user_token_1):
+    r1 = client.post(
+        f"/families/{family_id}/status-updates",
+        json={"status_code": "need_talk", "note": "今天有点难过，想哭。"},
+        headers=_auth_headers(user_token_1),
+    )
+    assert r1.status_code == 200
+
+    r2 = client.get(f"/families/{family_id}/care-reminders", headers=_auth_headers(user_token_1))
+    assert r2.status_code == 200
+    reminders = r2.get_json()
+    assert any(x.get("type") == "mood_low_keyword" for x in reminders)
+
+
 def test_emergency_contacts_and_care_reminders_smoke(client, family_id, user_token_1):
     r0 = client.get(f"/families/{family_id}/care-reminders", headers=_auth_headers(user_token_1))
     assert r0.status_code == 200

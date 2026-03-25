@@ -1329,6 +1329,49 @@ def list_care_reminders(family_id: int):
     db = get_db()
     reminders = []
 
+    mood_keywords = [
+        "难过",
+        "不开心",
+        "沮丧",
+        "焦虑",
+        "压力",
+        "想哭",
+        "抑郁",
+        "心烦",
+        "烦",
+        "累",
+        "很累",
+        "睡不着",
+    ]
+    recent_notes = db.execute(
+        """
+        SELECT
+            COALESCE(note, '') AS note,
+            created_at
+        FROM family_status_updates
+        WHERE family_id = ?
+        ORDER BY id DESC
+        LIMIT 30
+        """,
+        (family_id,),
+    ).fetchall()
+    for row in recent_notes:
+        note = (row["note"] or "").strip()
+        if not note:
+            continue
+        lowered = note.lower()
+        hit = next((k for k in mood_keywords if k in note or k in lowered), None)
+        if hit is not None:
+            reminders.append(
+                {
+                    "type": "mood_low_keyword",
+                    "title": "Possible low mood detected",
+                    "message": f"Recent status note mentions '{hit}'. Consider checking in gently.",
+                    "severity": "high" if hit in {"抑郁", "想哭", "睡不着"} else "medium",
+                }
+            )
+            break
+
     latest_status = db.execute(
         "SELECT created_at FROM family_status_updates WHERE family_id = ? ORDER BY id DESC LIMIT 1",
         (family_id,),
