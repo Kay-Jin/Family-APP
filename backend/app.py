@@ -1,3 +1,6 @@
+import hashlib
+import hmac
+import os
 import secrets
 import sqlite3
 import string
@@ -5,8 +8,12 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import jwt
+import requests
+from dotenv import load_dotenv
 from flask import Flask, g, jsonify, request, send_from_directory
 from werkzeug.utils import secure_filename
+
+load_dotenv()
 
 BASE_DIR = Path(__file__).parent
 DB_PATH = BASE_DIR / "family_app.db"
@@ -190,6 +197,131 @@ def make_invite_code(length: int = 8) -> str:
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
+
+
+def _wechat_union_id_from_code(code: str) -> str:
+    """Exchange WeChat OAuth code for a stable id (unionid preferred)."""
+    if code == "demo_wechat":
+        return "demo_wechat_union"
+    app_id = os.environ.get("WECHAT_APP_ID", "").strip()
+    app_secret = os.environ.get("WECHAT_APP_SECRET", "").strip()
+    if not app_id or not app_secret:
+        raise ValueError(
+            "WeChat app is not configured. Set WECHAT_APP_ID and WECHAT_APP_SECRET, "
+            "or use code demo_wechat for a local demo."
+        )
+    r = requests.get(
+        "https://api.weixin.qq.com/sns/oauth2/access_token",
+        params={
+            "appid": app_id,
+            "secret": app_secret,
+            "code": code,
+            "grant_type": "authorization_code",
+        },
+        timeout=15,
+    )
+    data = r.json()
+    if data.get("errcode"):
+        raise ValueError(data.get("errmsg") or "wechat token error")
+    unionid = data.get("unionid")
+    openid = data.get("openid")
+    if unionid:
+        return str(unionid)
+    if openid:
+        return f"openid_{openid}"
+    raise ValueError("WeChat response missing openid")
+
+
+def _wechat_synthetic_email(union_id: str) -> str:
+    digest = hashlib.sha256(union_id.encode("utf-8")).hexdigest()[:40]
+    return f"w_{digest}@wechat.familyapp"
+
+
+def _wechat_derived_password(union_id: str) -> str:
+    secret = os.environ.get("WECHAT_DERIVE_SECRET", JWT_SECRET).encode("utf-8")
+    return hmac.new(secret, union_id.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
+
+
+def _supabase_ensure_user(email: str, password: str, union_id: str) -> None:
+    url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    if not url or not service_key:
+        raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set for WeChat → Supabase login.")
+    headers = {
+        "Authorization": f"Bearer {service_key}",
+        "apikey": service_key,
+        "Content-Type": "application/json",
+    }
+    r = requests.post(
+        f"{url}/auth/v1/admin/users",
+        headers=headers,
+        json={
+            "email": email,
+            "password": password,
+            "email_confirm": True,
+            "user_metadata": {"wechat_unionid": union_id, "provider": "wechat"},
+        },
+        timeout=20,
+    )
+    if r.status_code in (200, 201):
+        return
+    body = (r.text or "").lower()
+    if r.status_code == 422 or "already" in body or "registered" in body:
+        return
+    r.raise_for_status()
+
+
+def _supabase_password_token(email: str, password: str) -> dict:
+    url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    anon = os.environ.get("SUPABASE_ANON_KEY", "").strip()
+    if not url or not anon:
+        raise ValueError("SUPABASE_URL and SUPABASE_ANON_KEY must be set for WeChat → Supabase login.")
+    r = requests.post(
+        f"{url}/auth/v1/token?grant_type=password",
+        headers={
+            "apikey": anon,
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        data={"email": email, "password": password},
+        timeout=20,
+    )
+    if not r.ok:
+        try:
+            err = r.json()
+            msg = err.get("error_description") or err.get("msg") or err.get("message")
+        except Exception:
+            msg = None
+        raise ValueError(msg or r.text or "supabase sign-in failed")
+    return r.json()
+
+
+@app.route("/auth/wechat-supabase", methods=["POST"])
+def wechat_supabase_login():
+    """
+    Mobile WeChat SDK returns a one-time `code`; this route exchanges it (via WeChat API),
+    ensures a Supabase user exists, and returns access_token + refresh_token for the app.
+    Use code \"demo_wechat\" when WECHAT_APP_ID is not set (local demo).
+    """
+    payload = request.get_json(force=True)
+    code = (payload.get("code") or "").strip()
+    if not code:
+        return jsonify({"error": "code is required"}), 400
+    try:
+        union_id = _wechat_union_id_from_code(code)
+        email = _wechat_synthetic_email(union_id)
+        password = _wechat_derived_password(union_id)
+        _supabase_ensure_user(email, password, union_id)
+        tokens = _supabase_password_token(email, password)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except requests.RequestException as e:
+        return jsonify({"error": f"upstream request failed: {e}"}), 502
+
+    access = tokens.get("access_token")
+    refresh = tokens.get("refresh_token")
+    if not access or not refresh:
+        return jsonify({"error": "supabase token response incomplete"}), 502
+    return jsonify({"access_token": access, "refresh_token": refresh})
 
 
 @app.route("/auth/wechat-login", methods=["POST"])

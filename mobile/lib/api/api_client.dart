@@ -33,6 +33,19 @@ class ApiClient {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  /// WeChat SDK `code` → Supabase session (backend must run; see `/auth/wechat-supabase`).
+  /// Use code `demo_wechat` when WeChat app credentials are not configured.
+  Future<Map<String, dynamic>> loginWechatSupabase({required String code}) async {
+    final uri = Uri.parse('$baseUrl/auth/wechat-supabase');
+    final response = await http.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'code': code}),
+    );
+    _ensureSuccess(response);
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
   Future<Family> createFamily({
     required String token,
     required String familyName,

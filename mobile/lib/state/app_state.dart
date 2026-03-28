@@ -136,6 +136,18 @@ class AppState extends ChangeNotifier {
     });
   }
 
+  /// WeChat mobile OAuth `code` exchanged by backend; then Supabase session.
+  Future<void> signInWithWechatSupabase({required String code}) async {
+    await _runBusy(() async {
+      final data = await _apiClient.loginWechatSupabase(code: code.trim());
+      final refresh = data['refresh_token'] as String?;
+      if (refresh == null || refresh.isEmpty) {
+        throw Exception('Server did not return refresh_token');
+      }
+      await Supabase.instance.client.auth.setSession(refresh);
+    });
+  }
+
   Future<void> _persistPendingVoiceUpload() async {
     if (pendingVoiceUpload == null) return;
     final prefs = await SharedPreferences.getInstance();

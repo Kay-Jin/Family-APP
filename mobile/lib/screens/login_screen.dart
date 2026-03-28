@@ -10,6 +10,35 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
+Future<void> _showWechatCodeDialog(BuildContext context, AppState appState) async {
+  final t = AppStrings.of(context);
+  final controller = TextEditingController();
+  final code = await showDialog<String>(
+    context: context,
+    builder: (ctx) {
+      return AlertDialog(
+        title: Text(t.text('wechat_supabase_with_code')),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(labelText: t.text('wechat_oauth_code')),
+          autocorrect: false,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(t.text('cancel'))),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: Text(t.text('auth_sign_in')),
+          ),
+        ],
+      );
+    },
+  );
+  controller.dispose();
+  if (code != null && code.isNotEmpty) {
+    await appState.signInWithWechatSupabase(code: code);
+  }
+}
+
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -124,6 +153,33 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                             icon: const Icon(Icons.person_add_outlined),
                             label: Text(t.text('auth_sign_up')),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          t.text('wechat_need_backend'),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: const Color(0xFF6D5A51),
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: appState.isBusy
+                                ? null
+                                : () => appState.signInWithWechatSupabase(code: 'demo_wechat'),
+                            icon: const Icon(Icons.chat_bubble_outline),
+                            label: Text(t.text('wechat_supabase_demo')),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: appState.isBusy ? null : () => _showWechatCodeDialog(context, appState),
+                            icon: const Icon(Icons.vpn_key_outlined),
+                            label: Text(t.text('wechat_supabase_with_code')),
                           ),
                         ),
                         if (appState.error != null) ...[
