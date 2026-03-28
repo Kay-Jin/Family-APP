@@ -153,10 +153,11 @@ def test_voice_upload_and_delete_removes_file(client, app_module, family_id, use
         "duration_seconds": "2",
         "file": (io.BytesIO(b"FAKEAUDIO"), "voice.m4a"),
     }
+    # Let the test client set multipart boundary; a bare "multipart/form-data"
+    # header breaks parsing on Linux CI (Werkzeug).
     r = client.post(
         f"/families/{family_id}/voice-messages/upload",
         data=data,
-        content_type="multipart/form-data",
         headers=_auth_headers(user_token_1),
     )
     assert r.status_code == 200

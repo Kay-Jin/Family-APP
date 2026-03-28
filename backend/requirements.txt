@@ -3,3 +3,4 @@ python-dotenv==1.0.1
 PyJWT==2.9.0
 pytest==8.3.5
 requests==2.32.3
+charset-normalizer==3.4.1

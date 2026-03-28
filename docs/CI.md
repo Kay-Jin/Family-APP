@@ -45,3 +45,15 @@ CI（Continuous Integration）会在你**推送代码**或**发起 Pull Request*
 
 - 全量（仅 Flutter）：`powershell -ExecutionPolicy Bypass -File scripts/run_tests.ps1`
 - Supabase SQL（需本机安装 `psql` 并设置 `SUPABASE_DB_URL`）：`powershell -ExecutionPolicy Bypass -File scripts/run_supabase_schema_checks.ps1`
+
+## Schema 检查失败时怎么办
+
+若 `schema_checks.sql` 的 `failed_count` 大于 0，日志里的 `details` 会列出缺列、缺函数、缺 Storage 桶/策略等。请先在 Supabase **SQL Editor** 执行与线上一致的迁移，例如：
+
+- [`supabase/migrations/20260328_answer_images_and_storage.sql`](../supabase/migrations/20260328_answer_images_and_storage.sql)（`daily_answers.image_path` + `family_answer_images` 桶与三条 storage 策略）
+
+执行后再跑一次检查，直到 `failed_count = 0`。完整基线仍以 [`supabase/schema.sql`](../supabase/schema.sql) 为准。
+
+## GitHub Actions：Python 测试说明
+
+后端集成测试里 multipart 上传**不要**手写 `Content-Type: multipart/form-data`（缺少 boundary 会在 Linux runner 上解析失败）。由 Flask `test_client` 在传入 `data` 含文件字段时自动带 boundary。
