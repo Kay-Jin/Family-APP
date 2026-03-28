@@ -162,19 +162,13 @@ using (
   )
 );
 
+-- Must not self-join family_members here (Postgres RLS → infinite recursion).
 drop policy if exists "family_members_select_if_member" on public.family_members;
 create policy "family_members_select_if_member"
 on public.family_members
 for select
 to authenticated
-using (
-  exists (
-    select 1
-    from public.family_members m
-    where m.family_id = family_members.family_id
-      and m.user_id = auth.uid()
-  )
-);
+using (user_id = auth.uid());
 
 -- No INSERT/UPDATE/DELETE policies on family_members for authenticated:
 -- membership changes go through trigger (new family) or join_family_by_code().
