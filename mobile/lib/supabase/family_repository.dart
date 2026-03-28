@@ -15,7 +15,7 @@ class FamilyRepository {
     required String name,
   }) async {
     final row = await _client.from('families').insert({'name': name}).select().single();
-    return FamilyRow.fromJson(row as Map<String, dynamic>);
+    return FamilyRow.fromJson(Map<String, dynamic>.from(row as Map));
   }
 
   Future<FamilyRow> updateFamily({
@@ -23,7 +23,7 @@ class FamilyRepository {
     required String name,
   }) async {
     final row = await _client.from('families').update({'name': name}).eq('id', id).select().single();
-    return FamilyRow.fromJson(row as Map<String, dynamic>);
+    return FamilyRow.fromJson(Map<String, dynamic>.from(row as Map));
   }
 
   Future<void> deleteFamily(String id) async {

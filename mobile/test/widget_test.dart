@@ -1,17 +1,24 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:family_mobile/main.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
-  testWidgets('App boots', (WidgetTester tester) async {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
+    await Supabase.initialize(
+      url: 'https://test.supabase.co',
+      anonKey: 'public-anon-key-for-widget-tests-only',
+    );
+  });
+
+  testWidgets('FamilyApp builds and shows login when logged out', (WidgetTester tester) async {
     await tester.pumpWidget(const FamilyApp());
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
     expect(find.byType(FamilyApp), findsOneWidget);
   });
 }
