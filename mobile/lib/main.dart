@@ -2,6 +2,7 @@ import 'package:family_mobile/screens/home_screen.dart';
 import 'package:family_mobile/l10n/app_strings.dart';
 import 'package:family_mobile/screens/login_screen.dart';
 import 'package:family_mobile/screens/supabase_family_screen.dart';
+import 'package:family_mobile/screens/dual_session_shell.dart';
 import 'package:family_mobile/state/app_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -96,6 +97,9 @@ class FamilyApp extends StatelessWidget {
               }
               if (!appState.isLoggedIn) {
                 return const LoginScreen();
+              }
+              if (appState.hasFlaskSession && appState.hasSupabaseSession) {
+                return const DualSessionShell();
               }
               if (appState.hasSupabaseSession && !appState.hasFlaskSession) {
                 return const SupabaseFamilyScreen();

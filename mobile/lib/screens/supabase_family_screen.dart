@@ -3,6 +3,7 @@ import 'package:family_mobile/screens/supabase_family_detail_screen.dart';
 import 'package:family_mobile/supabase/family_repository.dart';
 import 'package:family_mobile/supabase/family_row.dart';
 import 'package:family_mobile/state/app_state.dart';
+import 'package:family_mobile/util/api_error_message.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -45,7 +46,7 @@ class _SupabaseFamilyScreenState extends State<SupabaseFamilyScreen> {
       final items = await _repo.listFamilies();
       setState(() => _families = items);
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = apiErrorMessage(e, _t));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -60,7 +61,7 @@ class _SupabaseFamilyScreenState extends State<SupabaseFamilyScreen> {
       _createController.clear();
       await _refresh();
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = apiErrorMessage(e, _t));
     }
   }
 
@@ -79,7 +80,7 @@ class _SupabaseFamilyScreenState extends State<SupabaseFamilyScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_t('join_family'))));
       }
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = apiErrorMessage(e, _t));
     }
   }
 
@@ -112,7 +113,7 @@ class _SupabaseFamilyScreenState extends State<SupabaseFamilyScreen> {
       await _repo.updateFamily(id: family.id, name: newName);
       await _refresh();
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = apiErrorMessage(e, _t));
     }
   }
 
@@ -137,20 +138,44 @@ class _SupabaseFamilyScreenState extends State<SupabaseFamilyScreen> {
       await _repo.deleteFamily(family.id);
       await _refresh();
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = apiErrorMessage(e, _t));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
     return Scaffold(
       appBar: AppBar(
         title: Text(_t('cloud_families_title')),
         actions: [
+          PopupMenuButton<String?>(
+            tooltip: _t('language'),
+            icon: const Icon(Icons.language),
+            onSelected: (value) => appState.setLocaleCode(value),
+            itemBuilder: (context) => [
+              PopupMenuItem<String?>(
+                value: null,
+                child: Text(_t('system_default')),
+              ),
+              PopupMenuItem<String?>(
+                value: 'en',
+                child: Text(_t('language_en')),
+              ),
+              PopupMenuItem<String?>(
+                value: 'zh',
+                child: Text(_t('language_zh')),
+              ),
+              PopupMenuItem<String?>(
+                value: 'ko',
+                child: Text(_t('language_ko')),
+              ),
+            ],
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: TextButton.icon(
-              onPressed: () => context.read<AppState>().logout(),
+              onPressed: () => appState.logout(),
               icon: const Icon(Icons.logout),
               label: Text(_t('logout')),
             ),

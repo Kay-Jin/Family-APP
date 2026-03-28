@@ -3,6 +3,8 @@ import 'package:family_mobile/supabase/cloud_daily_answer.dart';
 import 'package:family_mobile/supabase/cloud_daily_question.dart';
 import 'package:family_mobile/supabase/daily_repository.dart';
 import 'package:family_mobile/supabase/family_row.dart';
+import 'package:family_mobile/util/api_error_message.dart';
+import 'package:family_mobile/util/date_time_display.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -59,7 +61,7 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
       final list = await _dailyRepo.listQuestions(widget.family.id);
       setState(() => _questions = list);
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = apiErrorMessage(e, _t));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -69,7 +71,12 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
     try {
       final list = await _dailyRepo.listAnswers(questionId);
       if (mounted) setState(() => _answers[questionId] = list);
-    } catch (_) {}
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(apiErrorMessage(e, _t))),
+      );
+    }
   }
 
   Future<void> _addQuestion() async {
@@ -95,8 +102,13 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
       );
       _questionTextController.clear();
       await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_t('snack_question_added'))),
+        );
+      }
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = apiErrorMessage(e, _t));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -114,8 +126,13 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
       await _dailyRepo.createAnswer(questionId: questionId, answerText: text);
       ctrl.clear();
       await _loadAnswers(questionId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_t('snack_answer_added'))),
+        );
+      }
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = apiErrorMessage(e, _t));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -210,7 +227,9 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       title: Text(a.answerText),
-                      subtitle: Text('${a.userDisplayName} · ${a.createdAt}'),
+                      subtitle: Text(
+                        '${a.userDisplayName} · ${formatIsoDateTimeLocal(context, a.createdAt)}',
+                      ),
                     ),
                   ),
                 const SizedBox(height: 8),

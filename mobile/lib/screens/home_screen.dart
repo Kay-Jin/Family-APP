@@ -1,6 +1,7 @@
 import 'package:family_mobile/screens/supabase_family_screen.dart';
 import 'package:family_mobile/state/app_state.dart';
 import 'package:family_mobile/l10n/app_strings.dart';
+import 'package:family_mobile/util/api_error_message.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -1896,7 +1897,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               ),
             ],
           ),
-          if (appState.hasSupabaseSession)
+          if (appState.hasSupabaseSession && !appState.hasFlaskSession)
             IconButton(
               tooltip: _t('open_cloud_families'),
               onPressed: () {
@@ -1928,7 +1929,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 color: Colors.red.withValues(alpha: 0.08),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Text(
-                  appState.error!,
+                  apiErrorMessage(appState.error!, (k) => _t(k)),
                   style: const TextStyle(color: Colors.red),
                 ),
               ),
