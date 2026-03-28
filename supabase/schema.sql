@@ -208,7 +208,7 @@ alter table public.daily_answers enable row level security;
 create or replace function public.is_member_of_family(p_family_id uuid)
 returns boolean
 language plpgsql
-stable
+volatile
 security definer
 set search_path = public
 as $$
@@ -234,7 +234,7 @@ $$;
 create or replace function public.is_question_in_my_family(p_question_id uuid)
 returns boolean
 language plpgsql
-stable
+volatile
 security definer
 set search_path = public
 as $$
