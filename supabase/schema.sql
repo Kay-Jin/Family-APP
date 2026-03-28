@@ -201,16 +201,19 @@ create index if not exists daily_answers_question_id_idx on public.daily_answers
 alter table public.daily_questions enable row level security;
 alter table public.daily_answers enable row level security;
 
+-- Use (family_id IN (SELECT ...)) so INSERT WITH CHECK binds to the new row reliably
+-- (qualified "daily_questions.family_id" in EXISTS can fail RLS on insert in Postgres).
+
 drop policy if exists "daily_questions_select_member" on public.daily_questions;
 create policy "daily_questions_select_member"
 on public.daily_questions
 for select
 to authenticated
 using (
-  exists (
-    select 1 from public.family_members m
-    where m.family_id = daily_questions.family_id
-      and m.user_id = auth.uid()
+  family_id in (
+    select fm.family_id
+    from public.family_members fm
+    where fm.user_id = auth.uid()
   )
 );
 
@@ -220,10 +223,10 @@ on public.daily_questions
 for insert
 to authenticated
 with check (
-  exists (
-    select 1 from public.family_members m
-    where m.family_id = daily_questions.family_id
-      and m.user_id = auth.uid()
+  family_id in (
+    select fm.family_id
+    from public.family_members fm
+    where fm.user_id = auth.uid()
   )
 );
 
@@ -233,17 +236,17 @@ on public.daily_questions
 for update
 to authenticated
 using (
-  exists (
-    select 1 from public.family_members m
-    where m.family_id = daily_questions.family_id
-      and m.user_id = auth.uid()
+  family_id in (
+    select fm.family_id
+    from public.family_members fm
+    where fm.user_id = auth.uid()
   )
 )
 with check (
-  exists (
-    select 1 from public.family_members m
-    where m.family_id = daily_questions.family_id
-      and m.user_id = auth.uid()
+  family_id in (
+    select fm.family_id
+    from public.family_members fm
+    where fm.user_id = auth.uid()
   )
 );
 
@@ -253,10 +256,10 @@ on public.daily_questions
 for delete
 to authenticated
 using (
-  exists (
-    select 1 from public.family_members m
-    where m.family_id = daily_questions.family_id
-      and m.user_id = auth.uid()
+  family_id in (
+    select fm.family_id
+    from public.family_members fm
+    where fm.user_id = auth.uid()
   )
 );
 
@@ -266,12 +269,14 @@ on public.daily_answers
 for select
 to authenticated
 using (
-  exists (
-    select 1
+  question_id in (
+    select q.id
     from public.daily_questions q
-    inner join public.family_members m on m.family_id = q.family_id
-    where q.id = daily_answers.question_id
-      and m.user_id = auth.uid()
+    where q.family_id in (
+      select fm.family_id
+      from public.family_members fm
+      where fm.user_id = auth.uid()
+    )
   )
 );
 
@@ -282,12 +287,14 @@ for insert
 to authenticated
 with check (
   user_id = auth.uid()
-  and exists (
-    select 1
+  and question_id in (
+    select q.id
     from public.daily_questions q
-    inner join public.family_members m on m.family_id = q.family_id
-    where q.id = daily_answers.question_id
-      and m.user_id = auth.uid()
+    where q.family_id in (
+      select fm.family_id
+      from public.family_members fm
+      where fm.user_id = auth.uid()
+    )
   )
 );
 
