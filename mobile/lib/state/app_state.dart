@@ -11,6 +11,7 @@ import 'package:family_mobile/models/voice_message.dart';
 import 'package:family_mobile/models/emergency_contact.dart';
 import 'package:family_mobile/models/care_reminder.dart';
 import 'package:family_mobile/models/medical_card.dart';
+import 'package:family_mobile/util/pending_voice_file.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -66,6 +67,15 @@ class AppState extends ChangeNotifier {
       }
     }
     voiceUploadError = prefs.getString(_pendingVoiceUploadErrorKey);
+
+    if (pendingVoiceUpload != null) {
+      final fp = pendingVoiceUpload!['file_path'] as String?;
+      if (!await pendingVoiceFileStillPresent(fp)) {
+        pendingVoiceUpload = null;
+        voiceUploadError = null;
+        await _clearPendingVoiceUploadPersisted();
+      }
+    }
 
     final familyId = prefs.getInt('family_id');
     if (token != null && familyId != null) {
@@ -309,6 +319,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    final pendingVoicePath = pendingVoiceUpload?['file_path'] as String?;
     token = null;
     userId = null;
     family = null;
@@ -330,6 +341,7 @@ class AppState extends ChangeNotifier {
     await prefs.remove('family_id');
     await prefs.remove(_pendingVoiceUploadKey);
     await prefs.remove(_pendingVoiceUploadErrorKey);
+    await removeMaterializedVoiceFile(pendingVoicePath);
     notifyListeners();
   }
 
@@ -411,6 +423,10 @@ class AppState extends ChangeNotifier {
   }) async {
     if (token == null || family == null) return;
     await _runBusy(() async {
+      final stablePath = await materializeVoiceFileForRetry(filePath);
+      if (stablePath == null) {
+        throw Exception('Voice file not found');
+      }
       Exception? lastError;
       var waitMs = 500;
       for (var i = 0; i < 3; i++) {
@@ -419,7 +435,7 @@ class AppState extends ChangeNotifier {
             token: token!,
             familyId: family!.id,
             title: title,
-            filePath: filePath,
+            filePath: stablePath,
             durationSeconds: durationSeconds,
           );
           lastError = null;
@@ -435,7 +451,7 @@ class AppState extends ChangeNotifier {
       if (lastError != null) {
         pendingVoiceUpload = {
           'title': title,
-          'file_path': filePath,
+          'file_path': stablePath,
           'duration_seconds': durationSeconds,
         };
         voiceUploadError = lastError.toString();
@@ -445,6 +461,7 @@ class AppState extends ChangeNotifier {
       pendingVoiceUpload = null;
       voiceUploadError = null;
       await _clearPendingVoiceUploadPersisted();
+      await removeMaterializedVoiceFile(stablePath);
       await _refreshHomeDataInternal();
     });
   }
@@ -452,10 +469,19 @@ class AppState extends ChangeNotifier {
   Future<void> retryPendingVoiceUpload() async {
     if (pendingVoiceUpload == null) return;
     final payload = pendingVoiceUpload!;
+    final title = payload['title'] as String? ?? '';
+    final path = payload['file_path'] as String? ?? '';
+    final rawDur = payload['duration_seconds'];
+    final durationSeconds = rawDur is int
+        ? rawDur
+        : rawDur is num
+            ? rawDur.toInt()
+            : int.tryParse('$rawDur') ?? 0;
+    if (title.isEmpty || path.isEmpty) return;
     await addVoiceMessageFromFile(
-      title: payload['title'] as String,
-      filePath: payload['file_path'] as String,
-      durationSeconds: payload['duration_seconds'] as int,
+      title: title,
+      filePath: path,
+      durationSeconds: durationSeconds,
     );
   }
 
