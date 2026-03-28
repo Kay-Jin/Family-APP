@@ -1,6 +1,9 @@
 .DS_Store
 Thumbs.db
 
+# Cursor — MCP config may contain API tokens (never commit)
+.cursor/mcp.json
+
 # Python backend
 backend/.venv/
 backend/__pycache__/
@@ -47,3 +50,6 @@ mobile/.metadata
 Thumbs.db
 .idea/
 .vscode/
+
+# Local device bugreports (large, not for git)
+mobile/bugreport*.zip
