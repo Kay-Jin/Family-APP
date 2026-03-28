@@ -14,6 +14,8 @@ import 'package:family_mobile/models/medical_card.dart';
 import 'package:family_mobile/util/pending_voice_file.dart';
 import 'dart:async';
 import 'dart:convert';
+
+import 'package:family_mobile/wechat/wechat_auth_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -136,15 +138,36 @@ class AppState extends ChangeNotifier {
     });
   }
 
+  Future<void> _exchangeWechatCodeForSession(String code) async {
+    final data = await _apiClient.loginWechatSupabase(code: code.trim());
+    final refresh = data['refresh_token'] as String?;
+    if (refresh == null || refresh.isEmpty) {
+      throw Exception('Server did not return refresh_token');
+    }
+    await Supabase.instance.client.auth.setSession(refresh);
+  }
+
   /// WeChat mobile OAuth `code` exchanged by backend; then Supabase session.
   Future<void> signInWithWechatSupabase({required String code}) async {
     await _runBusy(() async {
-      final data = await _apiClient.loginWechatSupabase(code: code.trim());
-      final refresh = data['refresh_token'] as String?;
-      if (refresh == null || refresh.isEmpty) {
-        throw Exception('Server did not return refresh_token');
+      await _exchangeWechatCodeForSession(code);
+    });
+  }
+
+  /// Native WeChat app OAuth via fluwx, then same backend exchange as [signInWithWechatSupabase].
+  Future<void> signInWithWechatMobile() async {
+    await _runBusy(() async {
+      try {
+        final code = await WechatAuthService.instance.requestAuthCode();
+        if (code == null || code.isEmpty) {
+          throw Exception('wechat_auth_cancelled');
+        }
+        await _exchangeWechatCodeForSession(code);
+      } on StateError catch (e) {
+        throw Exception(e.message);
+      } on TimeoutException {
+        throw Exception('wechat_auth_timeout');
       }
-      await Supabase.instance.client.auth.setSession(refresh);
     });
   }
 

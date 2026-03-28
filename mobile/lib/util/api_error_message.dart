@@ -35,6 +35,27 @@ String apiErrorMessage(Object error, String Function(String key) tr) {
   if (lower.contains('not signed in') || lower.contains('not logged')) {
     return tr('error_not_signed_in');
   }
+  if (lower.contains('answer_text_or_image_required')) {
+    return tr('answer_text_or_image_required');
+  }
+  if (lower.contains('wechat_not_configured')) {
+    return tr('error_wechat_not_configured');
+  }
+  if (lower.contains('wechat_not_installed')) {
+    return tr('error_wechat_not_installed');
+  }
+  if (lower.contains('wechat_not_supported_on_web')) {
+    return tr('error_wechat_not_supported_web');
+  }
+  if (lower.contains('wechat_auth_launch_failed')) {
+    return tr('error_wechat_launch_failed');
+  }
+  if (lower.contains('wechat_auth_timeout')) {
+    return tr('error_wechat_timeout');
+  }
+  if (lower.contains('wechat_auth_cancelled')) {
+    return tr('error_wechat_cancelled');
+  }
 
   return tr('error_generic');
 }

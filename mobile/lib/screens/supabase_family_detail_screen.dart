@@ -5,8 +5,11 @@ import 'package:family_mobile/supabase/daily_repository.dart';
 import 'package:family_mobile/supabase/family_row.dart';
 import 'package:family_mobile/util/api_error_message.dart';
 import 'package:family_mobile/util/date_time_display.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
 
 class SupabaseFamilyDetailScreen extends StatefulWidget {
   const SupabaseFamilyDetailScreen({super.key, required this.family});
@@ -22,6 +25,8 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
   final _dateController = TextEditingController();
   final _questionTextController = TextEditingController();
   final Map<String, TextEditingController> _answerControllers = {};
+  final Map<String, Uint8List> _pendingAnswerImageBytes = {};
+  final Map<String, String> _pendingAnswerImageExt = {};
 
   List<CloudDailyQuestion> _questions = [];
   final Map<String, List<CloudDailyAnswer>> _answers = {};
@@ -114,17 +119,55 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
     }
   }
 
+  Future<void> _pickAnswerImage(String questionId) async {
+    if (kIsWeb) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_t('answer_image_web_hint'))),
+      );
+      return;
+    }
+    final x = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (x == null) return;
+    final bytes = await x.readAsBytes();
+    final extDot = p.extension(x.path);
+    final ext = extDot.isNotEmpty ? extDot.substring(1).toLowerCase() : 'jpg';
+    if (!mounted) return;
+    setState(() {
+      _pendingAnswerImageBytes[questionId] = bytes;
+      _pendingAnswerImageExt[questionId] = ext;
+    });
+  }
+
+  void _clearPendingImage(String questionId) {
+    setState(() {
+      _pendingAnswerImageBytes.remove(questionId);
+      _pendingAnswerImageExt.remove(questionId);
+    });
+  }
+
   Future<void> _addAnswer(String questionId) async {
     final ctrl = _answerControllerFor(questionId);
     final text = ctrl.text.trim();
-    if (text.isEmpty) return;
+    final imgBytes = _pendingAnswerImageBytes[questionId];
+    if (text.isEmpty && (imgBytes == null || imgBytes.isEmpty)) {
+      setState(() => _error = _t('answer_text_or_image_required'));
+      return;
+    }
     setState(() {
       _error = null;
       _submitting = true;
     });
     try {
-      await _dailyRepo.createAnswer(questionId: questionId, answerText: text);
+      await _dailyRepo.createAnswer(
+        familyId: widget.family.id,
+        questionId: questionId,
+        answerText: text,
+        imageBytes: imgBytes,
+        imageExtension: _pendingAnswerImageExt[questionId],
+      );
       ctrl.clear();
+      _clearPendingImage(questionId);
       await _loadAnswers(questionId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -193,6 +236,7 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
 
   Widget _buildQuestionCard(CloudDailyQuestion q) {
     final answers = _answers[q.id] ?? [];
+    final pending = _pendingAnswerImageBytes[q.id];
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: ExpansionTile(
@@ -222,16 +266,7 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
                     child: Text(_t('no_answers'), style: Theme.of(context).textTheme.bodySmall),
                   )
                 else
-                  ...answers.map(
-                    (a) => ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(a.answerText),
-                      subtitle: Text(
-                        '${a.userDisplayName} · ${formatIsoDateTimeLocal(context, a.createdAt)}',
-                      ),
-                    ),
-                  ),
+                  ...answers.map((a) => _buildAnswerTile(a)),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _answerControllerFor(q.id),
@@ -240,6 +275,34 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
                   ),
                   maxLines: 2,
                 ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _submitting ? null : () => _pickAnswerImage(q.id),
+                  icon: const Icon(Icons.image_outlined),
+                  label: Text(_t('attach_answer_image')),
+                ),
+                if (pending != null && pending.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.memory(
+                          pending,
+                          height: 72,
+                          width: 72,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(_t('answer_image_ready'))),
+                      IconButton(
+                        onPressed: _submitting ? null : () => _clearPendingImage(q.id),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 6),
                 Align(
                   alignment: Alignment.centerRight,
@@ -251,6 +314,40 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnswerTile(CloudDailyAnswer a) {
+    final url = _dailyRepo.answerImagePublicUrl(a.imagePath);
+    final body = a.answerText.trim();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (url != null)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.network(
+                url,
+                height: 160,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(_t('answer_image_failed'), style: Theme.of(context).textTheme.bodySmall),
+                ),
+              ),
+            ),
+          if (body.isNotEmpty) Text(body, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 4),
+          Text(
+            '${a.userDisplayName} · ${formatIsoDateTimeLocal(context, a.createdAt)}',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: const Color(0xFF6D5A51)),
+          ),
+          const Divider(height: 16),
         ],
       ),
     );

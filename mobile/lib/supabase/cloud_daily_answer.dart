@@ -5,6 +5,7 @@ class CloudDailyAnswer {
     required this.userId,
     required this.userDisplayName,
     required this.answerText,
+    this.imagePath,
     required this.createdAt,
   });
 
@@ -13,15 +14,19 @@ class CloudDailyAnswer {
   final String userId;
   final String userDisplayName;
   final String answerText;
+  /// Storage object path in bucket `family_answer_images` (not a full URL).
+  final String? imagePath;
   final String createdAt;
 
   factory CloudDailyAnswer.fromJson(Map<String, dynamic> json) {
+    final img = json['image_path'];
     return CloudDailyAnswer(
       id: json['id'].toString(),
       questionId: json['question_id'].toString(),
       userId: json['user_id'].toString(),
       userDisplayName: (json['author_display_name'] ?? json['user_display_name'] ?? 'Member') as String,
       answerText: (json['answer_text'] ?? '') as String,
+      imagePath: img == null || (img is String && img.isEmpty) ? null : img as String,
       createdAt: (json['created_at'] ?? '').toString(),
     );
   }

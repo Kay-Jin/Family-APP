@@ -1,5 +1,8 @@
 import 'package:family_mobile/state/app_state.dart';
 import 'package:family_mobile/l10n/app_strings.dart';
+import 'package:family_mobile/util/api_error_message.dart';
+import 'package:family_mobile/wechat/wechat_config.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -182,10 +185,39 @@ class _LoginScreenState extends State<LoginScreen> {
                             label: Text(t.text('wechat_supabase_with_code')),
                           ),
                         ),
+                        if (!kIsWeb &&
+                            (defaultTargetPlatform == TargetPlatform.android ||
+                                defaultTargetPlatform == TargetPlatform.iOS)) ...[
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: appState.isBusy || !WechatConfig.isConfigured
+                                  ? null
+                                  : () => appState.signInWithWechatMobile(),
+                              icon: const Icon(Icons.phone_android_outlined),
+                              label: Text(
+                                t.text(
+                                  WechatConfig.isConfigured ? 'wechat_app_login' : 'wechat_app_not_configured',
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (!WechatConfig.isConfigured)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                t.text('wechat_dart_define_hint'),
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: const Color(0xFF6D5A51),
+                                    ),
+                              ),
+                            ),
+                        ],
                         if (appState.error != null) ...[
                           const SizedBox(height: 12),
                           Text(
-                            appState.error!,
+                            apiErrorMessage(appState.error!, (k) => t.text(k)),
                             style: const TextStyle(color: Colors.red),
                           ),
                         ],

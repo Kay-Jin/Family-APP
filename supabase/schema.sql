@@ -193,8 +193,12 @@ create table if not exists public.daily_answers (
   user_id uuid not null references auth.users (id) on delete cascade,
   author_display_name text,
   answer_text text not null,
+  image_path text,
   created_at timestamptz not null default now()
 );
+
+-- If the table already existed without image_path, add it when re-running this script.
+alter table public.daily_answers add column if not exists image_path text;
 
 create index if not exists daily_answers_question_id_idx on public.daily_answers (question_id);
 
@@ -332,3 +336,44 @@ grant select, insert, update, delete on public.families to authenticated;
 grant select on public.family_members to authenticated;
 grant select, insert, update, delete on public.daily_questions to authenticated;
 grant select, insert, update, delete on public.daily_answers to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Storage: answer images (path = {family_id}/{user_id}/{filename})
+-- Public bucket so Image.network(publicUrl) works; upload/delete restricted by RLS.
+-- ---------------------------------------------------------------------------
+
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('family_answer_images', 'family_answer_images', true, 10485760)
+on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit;
+
+drop policy if exists "answer_images_select_member" on storage.objects;
+create policy "answer_images_select_member"
+on storage.objects
+for select
+to authenticated
+using (
+  bucket_id = 'family_answer_images'
+  and public.is_member_of_family((split_part(name, '/', 1))::uuid)
+);
+
+drop policy if exists "answer_images_insert_own" on storage.objects;
+create policy "answer_images_insert_own"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'family_answer_images'
+  and split_part(name, '/', 2) = auth.uid()::text
+  and public.is_member_of_family((split_part(name, '/', 1))::uuid)
+);
+
+drop policy if exists "answer_images_delete_own" on storage.objects;
+create policy "answer_images_delete_own"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'family_answer_images'
+  and split_part(name, '/', 2) = auth.uid()::text
+  and public.is_member_of_family((split_part(name, '/', 1))::uuid)
+);
