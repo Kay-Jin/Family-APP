@@ -60,7 +60,7 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - run: pip install -r requirements.txt
-      - run: pytest tests -q
+      - run: python -m pytest tests -vv --tb=short
 
   supabase-schema:
     name: Supabase (schema SQL checks)

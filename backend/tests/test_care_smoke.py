@@ -66,7 +66,7 @@ def test_emergency_contacts_and_care_reminders_smoke(client, family_id, user_tok
     assert r2.status_code == 200
     contacts = r2.get_json()
     assert isinstance(contacts, list)
-    assert any(c.get("is_primary") == 1 for c in contacts)
+    assert any(c.get("is_primary") in (1, True) for c in contacts)
 
     r_update = client.patch(
         f"/emergency-contacts/{contact['id']}",

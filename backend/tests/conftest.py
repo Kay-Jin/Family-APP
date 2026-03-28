@@ -1,6 +1,14 @@
 import importlib
+import sys
+from pathlib import Path
 
 import pytest
+
+# Ensure `import app` resolves to backend/app.py in all runners (pytest entrypoint,
+# GitHub Actions, IDEs) regardless of how sys.path is initialized.
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent
+if str(_BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_ROOT))
 
 
 @pytest.fixture()
