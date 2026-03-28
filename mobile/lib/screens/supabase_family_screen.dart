@@ -201,31 +201,60 @@ class _SupabaseFamilyScreenState extends State<SupabaseFamilyScreen> {
             if (_loading) const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
             ..._families.map(
               (f) => Card(
-                child: ListTile(
-                  onTap: _loading
-                      ? null
-                      : () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => SupabaseFamilyDetailScreen(family: f),
-                            ),
-                          );
-                        },
-                  title: Text(f.name),
-                  subtitle: Text('${_t('invite_code')}: ${f.inviteCode}'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        onPressed: _loading ? null : () => _edit(f),
-                        icon: const Icon(Icons.edit_outlined),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: _loading
+                            ? null
+                            : () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => SupabaseFamilyDetailScreen(family: f),
+                                  ),
+                                );
+                              },
+                        borderRadius: BorderRadius.circular(18),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      f.name,
+                                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${_t('invite_code')}: ${f.inviteCode}',
+                                      style: Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                color: Theme.of(context).colorScheme.outline,
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                      IconButton(
-                        onPressed: _loading ? null : () => _delete(f),
-                        icon: const Icon(Icons.delete_outline),
-                      ),
-                    ],
-                  ),
+                    ),
+                    IconButton(
+                      onPressed: _loading ? null : () => _edit(f),
+                      icon: const Icon(Icons.edit_outlined),
+                    ),
+                    IconButton(
+                      onPressed: _loading ? null : () => _delete(f),
+                      icon: const Icon(Icons.delete_outline),
+                    ),
+                  ],
                 ),
               ),
             ),
