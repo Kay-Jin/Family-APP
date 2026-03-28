@@ -5,34 +5,42 @@ Updated: 2026-03-28
 ## Current status
 
 - **Repo**: [Kay-Jin/Family-APP](https://github.com/Kay-Jin/Family-APP) — `main` is pushed and intended to match local when clean.
-- **CI**: GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on push/PR to `main`/`master`: Flutter analyze + tests (`mobile/`), pytest (`backend/`). Optional Supabase schema job runs only if repo secret `SUPABASE_DB_URL` is set — see [`docs/CI.md`](docs/CI.md).
+- **CI**: GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) — latest run on `main` is **green** (Flutter + Python). Optional Supabase schema job runs only if repo secret `SUPABASE_DB_URL` is set — see [`docs/CI.md`](docs/CI.md).
 - **Backend and mobile**: scaffolds and core flows in place (families, daily Q&A, photos, birthdays, care modules, WeChat bridge + Supabase cloud paths as implemented in code).
 - **Voice upload**: persistence across app restart (SharedPreferences + stable file path); auto retry and manual retry UI.
 - **Tests**: Backend care smoke tests; Flutter unit/widget tests; `scripts/run_tests.ps1` for Flutter analyze + test.
-- **Supabase**: `supabase/schema.sql` and migrations (e.g. [`supabase/migrations/20260328_answer_images_and_storage.sql`](supabase/migrations/20260328_answer_images_and_storage.sql)) — apply in **Supabase Dashboard → SQL Editor** when the live project lags the repo. (Read-only MCP cannot apply DDL.) As of 2026-03-28, a schema check against the linked project reported 5 failures (`image_path` + `family_answer_images` bucket/policies) **until** that migration is run. Regression query: [`supabase/tests/schema_checks.sql`](supabase/tests/schema_checks.sql); local helper: `scripts/run_supabase_schema_checks.ps1` (needs `psql` + `SUPABASE_DB_URL`).
+- **Supabase (linked project, read-only MCP check)**: `daily_answers.image_path` and Storage bucket `family_answer_images` are **still missing** until you run the migration below. Cursor Supabase MCP cannot apply DDL in read-only mode. After you run it, confirm with [`supabase/tests/schema_checks.sql`](supabase/tests/schema_checks.sql) or `scripts/run_supabase_schema_checks.ps1` (`failed_count` should be `0`). Migration file: [`supabase/migrations/20260328_answer_images_and_storage.sql`](supabase/migrations/20260328_answer_images_and_storage.sql).
 - **Flutter platforms**: `linux/`, `macos/`, `web/`, `windows/` under `mobile/` are in repo for desktop/web builds.
+
+## Do this next (you, in order)
+
+1. **Supabase Dashboard** → **SQL Editor** → paste the full contents of [`supabase/migrations/20260328_answer_images_and_storage.sql`](supabase/migrations/20260328_answer_images_and_storage.sql) → **Run**.
+2. Optional: add GitHub Actions secret **`SUPABASE_DB_URL`** so CI runs schema checks on every push (see [`docs/CI.md`](docs/CI.md)).
+3. Follow **Release prep checklist** below (or pick **New features** / **Engineering** instead).
+
+## Release prep checklist (minimal)
+
+- [ ] **Stores**: Google Play / App Store developer accounts, app name, screenshots, short description, content rating questionnaire.
+- [ ] **Legal / policy**: Public **privacy policy URL** (required by stores); link it from store listing and optionally in-app settings / About.
+- [ ] **Production config**: Supabase production project URLs/keys in release builds only; WeChat / backend URLs point to production, not dev.
+- [ ] **Signing**: Android upload key / iOS distribution cert and provisioning profiles configured in CI or local release pipeline.
+- [ ] **Stability**: Crash reporting or Play/App vitals; smoke-test login, cloud family, daily Q&A, and image upload after migration.
 
 ## Completed recently (no longer “next”)
 
 - Pending voice upload retry persisted across restarts.
 - Care endpoint integration smoke tests added.
-- GitHub Actions CI added; commits pushed to `main`.
+- GitHub Actions CI added; pytest import/multipart fixes; `main` CI green.
 - `.cursor/mcp.json` **removed from git tracking** (still ignore-listed); keep tokens only on your machine.
 
 ## Last known blockers / risks
 
 - Android builds may still hit **Gradle/plugin download** issues on poor networks (mirrors, cache, or documented workarounds help).
-- **Cloud DB drift**: if production Supabase was never migrated for answer images + Storage, mobile cloud features may fail until migration is applied.
-
-## Recommended order (maintenance)
-
-1. Confirm **GitHub Actions** are green on the latest `main` (fix any red Flutter/Python jobs).
-2. Align **Supabase** with repo schema/migrations; optionally set **`SUPABASE_DB_URL`** on GitHub for CI schema checks.
-3. **Tokens**: if a GitHub PAT was ever pasted in chat, rotate it on GitHub and update local MCP config only (never commit).
+- **Cloud DB drift**: until the migration in step 1 is applied, cloud **answer images** flows can fail against the linked Supabase project.
 
 ## Product direction (pick one next focus)
 
-**Default suggestion:** after CI is green and the Supabase migration above is applied, start with **Release prep** (store listing, privacy URL, prod config), unless a specific feature is blocking users.
+**Default suggestion:** run the Supabase migration (step 1), then execute **Release prep** above.
 
 | Track | Examples |
 |-------|----------|
@@ -68,4 +76,4 @@ flutter run
 
 Use when reopening Cursor:
 
-`Continue family-app from NEXT_STEPS.md. Check GitHub Actions on main, Supabase schema vs supabase/schema.sql, then continue the product track chosen in NEXT_STEPS (release / features / engineering).`
+`Continue family-app from NEXT_STEPS.md. If Supabase migration is applied, verify schema_checks; otherwise remind me to run SQL Editor. Then continue release prep or chosen product track.`
