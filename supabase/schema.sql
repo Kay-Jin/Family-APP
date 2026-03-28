@@ -174,8 +174,143 @@ using (user_id = auth.uid());
 -- membership changes go through trigger (new family) or join_family_by_code().
 
 -- ---------------------------------------------------------------------------
+-- Daily questions & answers (cloud product; UUID ids)
+-- ---------------------------------------------------------------------------
+
+create table if not exists public.daily_questions (
+  id uuid primary key default gen_random_uuid(),
+  family_id uuid not null references public.families (id) on delete cascade,
+  question_date date not null,
+  question_text text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists daily_questions_family_id_idx on public.daily_questions (family_id);
+
+create table if not exists public.daily_answers (
+  id uuid primary key default gen_random_uuid(),
+  question_id uuid not null references public.daily_questions (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  author_display_name text,
+  answer_text text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists daily_answers_question_id_idx on public.daily_answers (question_id);
+
+alter table public.daily_questions enable row level security;
+alter table public.daily_answers enable row level security;
+
+drop policy if exists "daily_questions_select_member" on public.daily_questions;
+create policy "daily_questions_select_member"
+on public.daily_questions
+for select
+to authenticated
+using (
+  exists (
+    select 1 from public.family_members m
+    where m.family_id = daily_questions.family_id
+      and m.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "daily_questions_insert_member" on public.daily_questions;
+create policy "daily_questions_insert_member"
+on public.daily_questions
+for insert
+to authenticated
+with check (
+  exists (
+    select 1 from public.family_members m
+    where m.family_id = daily_questions.family_id
+      and m.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "daily_questions_update_member" on public.daily_questions;
+create policy "daily_questions_update_member"
+on public.daily_questions
+for update
+to authenticated
+using (
+  exists (
+    select 1 from public.family_members m
+    where m.family_id = daily_questions.family_id
+      and m.user_id = auth.uid()
+  )
+)
+with check (
+  exists (
+    select 1 from public.family_members m
+    where m.family_id = daily_questions.family_id
+      and m.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "daily_questions_delete_member" on public.daily_questions;
+create policy "daily_questions_delete_member"
+on public.daily_questions
+for delete
+to authenticated
+using (
+  exists (
+    select 1 from public.family_members m
+    where m.family_id = daily_questions.family_id
+      and m.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "daily_answers_select_member" on public.daily_answers;
+create policy "daily_answers_select_member"
+on public.daily_answers
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.daily_questions q
+    inner join public.family_members m on m.family_id = q.family_id
+    where q.id = daily_answers.question_id
+      and m.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "daily_answers_insert_member" on public.daily_answers;
+create policy "daily_answers_insert_member"
+on public.daily_answers
+for insert
+to authenticated
+with check (
+  user_id = auth.uid()
+  and exists (
+    select 1
+    from public.daily_questions q
+    inner join public.family_members m on m.family_id = q.family_id
+    where q.id = daily_answers.question_id
+      and m.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "daily_answers_update_own" on public.daily_answers;
+create policy "daily_answers_update_own"
+on public.daily_answers
+for update
+to authenticated
+using (user_id = auth.uid())
+with check (user_id = auth.uid());
+
+drop policy if exists "daily_answers_delete_own" on public.daily_answers;
+create policy "daily_answers_delete_own"
+on public.daily_answers
+for delete
+to authenticated
+using (user_id = auth.uid());
+
+-- ---------------------------------------------------------------------------
 -- Grants (Supabase often has defaults; explicit is clearer)
 -- ---------------------------------------------------------------------------
 
 grant select, insert, update, delete on public.families to authenticated;
 grant select on public.family_members to authenticated;
+grant select, insert, update, delete on public.daily_questions to authenticated;
+grant select, insert, update, delete on public.daily_answers to authenticated;

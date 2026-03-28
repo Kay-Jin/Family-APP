@@ -1,4 +1,5 @@
 import 'package:family_mobile/l10n/app_strings.dart';
+import 'package:family_mobile/screens/supabase_family_detail_screen.dart';
 import 'package:family_mobile/supabase/family_repository.dart';
 import 'package:family_mobile/supabase/family_row.dart';
 import 'package:family_mobile/state/app_state.dart';
@@ -201,6 +202,15 @@ class _SupabaseFamilyScreenState extends State<SupabaseFamilyScreen> {
             ..._families.map(
               (f) => Card(
                 child: ListTile(
+                  onTap: _loading
+                      ? null
+                      : () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => SupabaseFamilyDetailScreen(family: f),
+                            ),
+                          );
+                        },
                   title: Text(f.name),
                   subtitle: Text('${_t('invite_code')}: ${f.inviteCode}'),
                   trailing: Row(
