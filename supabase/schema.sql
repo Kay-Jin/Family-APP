@@ -201,84 +201,80 @@ create index if not exists daily_answers_question_id_idx on public.daily_answers
 alter table public.daily_questions enable row level security;
 alter table public.daily_answers enable row level security;
 
--- Use (family_id IN (SELECT ...)) so INSERT WITH CHECK binds to the new row reliably
--- (qualified "daily_questions.family_id" in EXISTS can fail RLS on insert in Postgres).
+-- SECURITY DEFINER helpers: plain subqueries on family_members can still see zero rows
+-- under nested RLS during INSERT checks; definer reads membership with explicit uid filter.
+
+create or replace function public.is_member_of_family(p_family_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.family_members fm
+    where fm.family_id = p_family_id
+      and fm.user_id = auth.uid()
+  );
+$$;
+
+create or replace function public.is_question_in_my_family(p_question_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.daily_questions q
+    inner join public.family_members fm on fm.family_id = q.family_id
+    where q.id = p_question_id
+      and fm.user_id = auth.uid()
+  );
+$$;
+
+revoke all on function public.is_member_of_family(uuid) from public;
+revoke all on function public.is_question_in_my_family(uuid) from public;
+grant execute on function public.is_member_of_family(uuid) to authenticated;
+grant execute on function public.is_question_in_my_family(uuid) to authenticated;
 
 drop policy if exists "daily_questions_select_member" on public.daily_questions;
 create policy "daily_questions_select_member"
 on public.daily_questions
 for select
 to authenticated
-using (
-  family_id in (
-    select fm.family_id
-    from public.family_members fm
-    where fm.user_id = auth.uid()
-  )
-);
+using (public.is_member_of_family(family_id));
 
 drop policy if exists "daily_questions_insert_member" on public.daily_questions;
 create policy "daily_questions_insert_member"
 on public.daily_questions
 for insert
 to authenticated
-with check (
-  family_id in (
-    select fm.family_id
-    from public.family_members fm
-    where fm.user_id = auth.uid()
-  )
-);
+with check (public.is_member_of_family(family_id));
 
 drop policy if exists "daily_questions_update_member" on public.daily_questions;
 create policy "daily_questions_update_member"
 on public.daily_questions
 for update
 to authenticated
-using (
-  family_id in (
-    select fm.family_id
-    from public.family_members fm
-    where fm.user_id = auth.uid()
-  )
-)
-with check (
-  family_id in (
-    select fm.family_id
-    from public.family_members fm
-    where fm.user_id = auth.uid()
-  )
-);
+using (public.is_member_of_family(family_id))
+with check (public.is_member_of_family(family_id));
 
 drop policy if exists "daily_questions_delete_member" on public.daily_questions;
 create policy "daily_questions_delete_member"
 on public.daily_questions
 for delete
 to authenticated
-using (
-  family_id in (
-    select fm.family_id
-    from public.family_members fm
-    where fm.user_id = auth.uid()
-  )
-);
+using (public.is_member_of_family(family_id));
 
 drop policy if exists "daily_answers_select_member" on public.daily_answers;
 create policy "daily_answers_select_member"
 on public.daily_answers
 for select
 to authenticated
-using (
-  question_id in (
-    select q.id
-    from public.daily_questions q
-    where q.family_id in (
-      select fm.family_id
-      from public.family_members fm
-      where fm.user_id = auth.uid()
-    )
-  )
-);
+using (public.is_question_in_my_family(question_id));
 
 drop policy if exists "daily_answers_insert_member" on public.daily_answers;
 create policy "daily_answers_insert_member"
@@ -287,15 +283,7 @@ for insert
 to authenticated
 with check (
   user_id = auth.uid()
-  and question_id in (
-    select q.id
-    from public.daily_questions q
-    where q.family_id in (
-      select fm.family_id
-      from public.family_members fm
-      where fm.user_id = auth.uid()
-    )
-  )
+  and public.is_question_in_my_family(question_id)
 );
 
 drop policy if exists "daily_answers_update_own" on public.daily_answers;
