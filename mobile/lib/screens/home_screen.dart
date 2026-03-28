@@ -1,3 +1,4 @@
+import 'package:family_mobile/screens/supabase_family_screen.dart';
 import 'package:family_mobile/state/app_state.dart';
 import 'package:family_mobile/l10n/app_strings.dart';
 import 'package:flutter/foundation.dart';
@@ -127,14 +128,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Future<void> _startVoiceRecording() async {
     if (kIsWeb) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Voice recording is not configured for web in this demo.')),
+        SnackBar(content: Text(_t('voice_recording_not_web'))),
       );
       return;
     }
     if (!await _audioRecorder.hasPermission()) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Microphone permission denied.')),
+        SnackBar(content: Text(_t('microphone_permission_denied'))),
       );
       return;
     }
@@ -186,7 +187,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to play this voice message')),
+        SnackBar(content: Text(_t('unable_play_voice'))),
       );
     }
   }
@@ -225,14 +226,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     if (type == 'daily_answer') {
       _tabController.animateTo(1);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Switched to Questions tab for answer activity')),
+        SnackBar(content: Text(_t('activity_switched_questions'))),
       );
       return;
     }
     if (type == 'photo_comment') {
       _tabController.animateTo(2);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Switched to Photos tab for comment activity')),
+        SnackBar(content: Text(_t('activity_switched_photos'))),
       );
       return;
     }
@@ -263,16 +264,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     }
     final diff = DateTime.now().difference(parsed.toLocal());
     if (diff.inSeconds < 60) {
-      return 'just now';
+      return _t('just_now');
     }
     if (diff.inMinutes < 60) {
-      return '${diff.inMinutes} minute(s) ago';
+      return '${diff.inMinutes} ${_t('minutes_ago')}';
     }
     if (diff.inHours < 24) {
-      return '${diff.inHours} hour(s) ago';
+      return '${diff.inHours} ${_t('hours_ago')}';
     }
     if (diff.inDays < 7) {
-      return '${diff.inDays} day(s) ago';
+      return '${diff.inDays} ${_t('days_ago')}';
     }
     return _formatDateTime(raw);
   }
@@ -286,7 +287,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       children: [
         TextField(
           controller: _familyNameController,
-          decoration: const InputDecoration(labelText: 'New Family Name'),
+          decoration: InputDecoration(labelText: _t('new_family_name')),
         ),
         const SizedBox(height: 12),
         FilledButton(
@@ -296,18 +297,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   final name = _familyNameController.text.trim();
                   if (name.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Family name is required')),
+                      SnackBar(content: Text(_t('family_name_required'))),
                     );
                     return;
                   }
                   appState.createFamily(name);
                 },
-          child: const Text('Create Family'),
+          child: Text(_t('create_family')),
         ),
         const SizedBox(height: 16),
         TextField(
           controller: _inviteCodeController,
-          decoration: const InputDecoration(labelText: 'Invite Code'),
+          decoration: InputDecoration(labelText: _t('invite_code')),
         ),
         const SizedBox(height: 12),
         OutlinedButton(
@@ -317,13 +318,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   final code = _inviteCodeController.text.trim();
                   if (code.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Invite code is required')),
+                      SnackBar(content: Text(_t('invite_code_required'))),
                     );
                     return;
                   }
                   appState.joinFamily(code);
                 },
-          child: const Text('Join Family'),
+          child: Text(_t('join_family')),
         ),
       ],
     );
@@ -362,12 +363,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         const SizedBox(height: 8),
         TextField(
           controller: _questionDateController,
-          decoration: const InputDecoration(labelText: 'Question Date (YYYY-MM-DD)'),
+          decoration: InputDecoration(labelText: _t('question_date')),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _questionTextController,
-          decoration: const InputDecoration(labelText: 'Question Text'),
+          decoration: InputDecoration(labelText: _t('question_text')),
         ),
         const SizedBox(height: 8),
         OutlinedButton(
@@ -378,13 +379,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   final text = _questionTextController.text.trim();
                   if (!_isValidDate(date)) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Question date must be YYYY-MM-DD')),
+                      SnackBar(content: Text(_t('question_date_invalid'))),
                     );
                     return;
                   }
                   if (text.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Question text is required')),
+                      SnackBar(content: Text(_t('question_text_required'))),
                     );
                     return;
                   }
@@ -394,7 +395,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         ),
         const SizedBox(height: 16),
         Text(
-          'Daily Questions',
+          _t('daily_questions'),
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 8),
@@ -425,22 +426,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                     context: context,
                                     builder: (context) {
                                       return AlertDialog(
-                                        title: const Text('Answer Question'),
+                                        title: Text(_t('answer_question')),
                                         content: TextField(
                                           controller: _answerController,
-                                          decoration: const InputDecoration(labelText: 'Your answer'),
+                                          decoration: InputDecoration(labelText: _t('your_answer')),
                                         ),
                                         actions: [
                                           TextButton(
                                             onPressed: () => Navigator.pop(context),
-                                            child: const Text('Cancel'),
+                                            child: Text(_t('cancel')),
                                           ),
                                           FilledButton(
                                             onPressed: () => Navigator.pop(
                                               context,
                                               _answerController.text.trim(),
                                             ),
-                                            child: const Text('Submit'),
+                                            child: Text(_t('submit')),
                                           ),
                                         ],
                                       );
@@ -452,7 +453,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                   appState.addDailyAnswer(questionId: q.id, answerText: answer);
                                 },
                           icon: const Icon(Icons.edit_note),
-                          label: const Text('Answer'),
+                          label: Text(_t('answer')),
                         ),
                         TextButton.icon(
                           onPressed: appState.isBusy
@@ -473,14 +474,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                             child: ListView(
                                               children: [
                                                 Text(
-                                                  'Answers',
+                                                  _t('answers'),
                                                   style: Theme.of(context).textTheme.titleMedium,
                                                 ),
                                                 const SizedBox(height: 12),
                                                 if (answers.isEmpty)
-                                                  const Padding(
+                                                  Padding(
                                                     padding: EdgeInsets.symmetric(vertical: 24),
-                                                    child: Center(child: Text('No answers yet.')),
+                                                    child: Center(child: Text(_t('no_answers_yet'))),
                                                   )
                                                 else
                                                   ...answers.map(
@@ -506,7 +507,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                   );
                                 },
                           icon: const Icon(Icons.visibility_outlined),
-                          label: const Text('View Answers'),
+                          label: Text(_t('view_answers')),
                         ),
                       ],
                     ),
@@ -545,15 +546,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       key: const PageStorageKey<String>('comments_sheet_list'),
                       children: [
                         Text(
-                          'Comments',
+                          _t('comments'),
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 12),
                         if (comments.isEmpty)
-                          const Padding(
+                          Padding(
                             padding: EdgeInsets.symmetric(vertical: 24),
                             child: Center(
-                              child: Text('No comments yet, be the first one.'),
+                              child: Text(_t('no_comments_yet')),
                             ),
                           )
                         else
@@ -627,7 +628,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   });
                 },
           icon: const Icon(Icons.photo_library_outlined),
-          label: Text(_pickedImagePath == null ? 'Pick Image From Gallery' : 'Change Picked Image'),
+          label: Text(_pickedImagePath == null ? _t('pick_image') : _t('change_image')),
         ),
         if (_pickedImagePath != null) ...[
           const SizedBox(height: 8),
@@ -639,7 +640,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         const SizedBox(height: 8),
         TextField(
           controller: _photoCaptionController,
-          decoration: const InputDecoration(labelText: 'Caption'),
+          decoration: InputDecoration(labelText: _t('caption')),
         ),
         const SizedBox(height: 8),
         OutlinedButton(
@@ -648,7 +649,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               : () {
                   if (_pickedImagePath == null) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please pick an image first')),
+                      SnackBar(content: Text(_t('pick_image_first'))),
                     );
                     return;
                   }
@@ -664,7 +665,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         ),
         const SizedBox(height: 16),
         Text(
-          'Photos',
+          _t('photos_title'),
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 8),
@@ -681,7 +682,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   children: [
                     ListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: Text(p.caption.isEmpty ? 'Photo #${p.id}' : p.caption),
+                      title: Text(p.caption.isEmpty ? '${_t('photos')} #${p.id}' : p.caption),
                       subtitle: Text(
                         p.imageUrl,
                         maxLines: 1,
@@ -704,10 +705,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                       p.imageUrl,
                                       fit: BoxFit.contain,
                                       errorBuilder: (context, _, __) {
-                                        return const SizedBox(
+                                        return SizedBox(
                                           height: 240,
                                           child: Center(
-                                            child: Text('Failed to load image'),
+                                            child: Text(_t('failed_load_image')),
                                           ),
                                         );
                                       },
@@ -747,7 +748,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               return Container(
                                 color: Colors.black12,
                                 alignment: Alignment.center,
-                                child: const Text('Image unavailable'),
+                                child: Text(_t('image_unavailable')),
                               );
                             },
                           ),
@@ -757,9 +758,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Text('Likes: ${p.likeCount}'),
+                        Text('${_t('likes_count')}: ${p.likeCount}'),
                         const SizedBox(width: 12),
-                        Text('Comments: ${p.commentCount}'),
+                        Text('${_t('comments_count')}: ${p.commentCount}'),
                         const Spacer(),
                         TextButton.icon(
                           onPressed: appState.isBusy
@@ -771,7 +772,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           icon: Icon(
                             p.hasLiked ? Icons.thumb_up : Icons.thumb_up_alt_outlined,
                           ),
-                          label: Text(p.hasLiked ? 'Unlike' : 'Like'),
+                          label: Text(p.hasLiked ? _t('unlike') : _t('like')),
                         ),
                         TextButton.icon(
                           onPressed: appState.isBusy
@@ -782,22 +783,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                     context: context,
                                     builder: (context) {
                                       return AlertDialog(
-                                        title: const Text('Add Comment'),
+                                        title: Text(_t('add_comment')),
                                         content: TextField(
                                           controller: _commentController,
-                                          decoration: const InputDecoration(labelText: 'Comment'),
+                                          decoration: InputDecoration(labelText: _t('comment')),
                                         ),
                                         actions: [
                                           TextButton(
                                             onPressed: () => Navigator.pop(context),
-                                            child: const Text('Cancel'),
+                                            child: Text(_t('cancel')),
                                           ),
                                           FilledButton(
                                             onPressed: () => Navigator.pop(
                                               context,
                                               _commentController.text.trim(),
                                             ),
-                                            child: const Text('Submit'),
+                                            child: Text(_t('submit')),
                                           ),
                                         ],
                                       );
@@ -809,12 +810,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                   appState.commentPhoto(photoId: p.id, content: content);
                                 },
                           icon: const Icon(Icons.comment_outlined),
-                          label: const Text('Comment'),
+                          label: Text(_t('comment')),
                         ),
                         TextButton.icon(
                           onPressed: appState.isBusy ? null : () => _openCommentsSheet(appState, p.id),
                           icon: const Icon(Icons.chat_bubble_outline),
-                          label: const Text('View'),
+                          label: Text(_t('view')),
                         ),
                         TextButton.icon(
                           onPressed: appState.isBusy
@@ -825,22 +826,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                     context: context,
                                     builder: (context) {
                                       return AlertDialog(
-                                        title: const Text('Edit Caption'),
+                                        title: Text(_t('edit_caption')),
                                         content: TextField(
                                           controller: _editCaptionController,
-                                          decoration: const InputDecoration(labelText: 'Caption'),
+                                          decoration: InputDecoration(labelText: _t('caption')),
                                         ),
                                         actions: [
                                           TextButton(
                                             onPressed: () => Navigator.pop(context),
-                                            child: const Text('Cancel'),
+                                            child: Text(_t('cancel')),
                                           ),
                                           FilledButton(
                                             onPressed: () => Navigator.pop(
                                               context,
                                               _editCaptionController.text.trim(),
                                             ),
-                                            child: const Text('Save'),
+                                            child: Text(_t('save')),
                                           ),
                                         ],
                                       );
@@ -855,7 +856,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                   );
                                 },
                           icon: const Icon(Icons.edit_outlined),
-                          label: const Text('Edit'),
+                          label: Text(_t('edit')),
                         ),
                         TextButton.icon(
                           onPressed: appState.isBusy
@@ -865,18 +866,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                     context: context,
                                     builder: (context) {
                                       return AlertDialog(
-                                        title: const Text('Delete Photo'),
-                                        content: const Text(
-                                          'Are you sure you want to delete this photo? This cannot be undone.',
-                                        ),
+                                        title: Text(_t('delete_photo')),
+                                        content: Text(_t('delete_photo_confirm')),
                                         actions: [
                                           TextButton(
                                             onPressed: () => Navigator.pop(context, false),
-                                            child: const Text('Cancel'),
+                                            child: Text(_t('cancel')),
                                           ),
                                           FilledButton(
                                             onPressed: () => Navigator.pop(context, true),
-                                            child: const Text('Delete'),
+                                            child: Text(_t('delete_confirm')),
                                           ),
                                         ],
                                       );
@@ -888,7 +887,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                   appState.deletePhoto(p.id);
                                 },
                           icon: const Icon(Icons.delete_outline),
-                          label: const Text('Delete'),
+                          label: Text(_t('delete')),
                         ),
                       ],
                     ),
@@ -908,13 +907,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       children: [
         TextField(
           controller: _birthdayController,
-          decoration: const InputDecoration(labelText: 'Birthday (YYYY-MM-DD)'),
+          decoration: InputDecoration(labelText: _t('birthday')),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _notifyDaysController,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Notify Days Before'),
+          decoration: InputDecoration(labelText: _t('notify_days_before')),
         ),
         const SizedBox(height: 8),
         OutlinedButton(
@@ -925,13 +924,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   final days = int.tryParse(_notifyDaysController.text.trim());
                   if (!_isValidDate(birthday)) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Birthday must be YYYY-MM-DD')),
+                      SnackBar(content: Text(_t('birthday_invalid'))),
                     );
                     return;
                   }
                   if (days == null || days < 0) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Notify days must be a non-negative number')),
+                      SnackBar(content: Text(_t('notify_days_invalid'))),
                     );
                     return;
                   }
@@ -951,13 +950,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               contentPadding: EdgeInsets.zero,
               title: Text(r.birthday),
               subtitle: Text(
-                'Notify ${r.notifyDaysBefore} day(s) before · ${r.enabled ? 'Enabled' : 'Disabled'}',
+                '${_t('notify_days_before')}: ${r.notifyDaysBefore} · ${r.enabled ? _t('enabled') : _t('disabled')}',
               ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    tooltip: 'Edit reminder',
+                    tooltip: _t('edit_reminder_tooltip'),
                     onPressed: appState.isBusy
                         ? null
                         : () async {
@@ -970,28 +969,24 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                 return StatefulBuilder(
                                   builder: (context, setDialogState) {
                                     return AlertDialog(
-                                      title: const Text('Edit Birthday Reminder'),
+                                      title: Text(_t('edit_birthday_reminder')),
                                       content: Column(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           TextField(
                                             controller: _editBirthdayController,
-                                            decoration: const InputDecoration(
-                                              labelText: 'Birthday (YYYY-MM-DD)',
-                                            ),
+                                            decoration: InputDecoration(labelText: _t('birthday')),
                                           ),
                                           const SizedBox(height: 8),
                                           TextField(
                                             controller: _editNotifyDaysController,
                                             keyboardType: TextInputType.number,
-                                            decoration: const InputDecoration(
-                                              labelText: 'Notify Days Before',
-                                            ),
+                                            decoration: InputDecoration(labelText: _t('notify_days_before')),
                                           ),
                                           const SizedBox(height: 8),
                                           SwitchListTile(
                                             contentPadding: EdgeInsets.zero,
-                                            title: const Text('Enabled'),
+                                            title: Text(_t('enabled')),
                                             value: enabled,
                                             onChanged: (v) => setDialogState(() => enabled = v),
                                           ),
@@ -1000,7 +995,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                       actions: [
                                         TextButton(
                                           onPressed: () => Navigator.pop(context),
-                                          child: const Text('Cancel'),
+                                          child: Text(_t('cancel')),
                                         ),
                                         FilledButton(
                                           onPressed: () {
@@ -1010,7 +1005,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                               'enabled': enabled,
                                             });
                                           },
-                                          child: const Text('Save'),
+                                          child: Text(_t('save')),
                                         ),
                                       ],
                                     );
@@ -1024,15 +1019,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             final enabledValue = (result['enabled'] as bool?) ?? true;
                             if (!_isValidDate(birthday)) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Birthday must be YYYY-MM-DD')),
+                                SnackBar(content: Text(_t('birthday_invalid'))),
                               );
                               return;
                             }
                             if (days == null || days < 0) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Notify days must be a non-negative number'),
-                                ),
+                                SnackBar(content: Text(_t('notify_days_invalid'))),
                               );
                               return;
                             }
@@ -1046,7 +1039,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     icon: const Icon(Icons.edit_outlined),
                   ),
                   IconButton(
-                    tooltip: 'Delete reminder',
+                    tooltip: _t('delete_reminder_tooltip'),
                     onPressed: appState.isBusy
                         ? null
                         : () async {
@@ -1054,16 +1047,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               context: context,
                               builder: (context) {
                                 return AlertDialog(
-                                  title: const Text('Delete Reminder'),
-                                  content: const Text('Delete this birthday reminder?'),
+                                  title: Text(_t('delete_reminder')),
+                                  content: Text(_t('delete_reminder_confirm')),
                                   actions: [
                                     TextButton(
                                       onPressed: () => Navigator.pop(context, false),
-                                      child: const Text('Cancel'),
+                                      child: Text(_t('cancel')),
                                     ),
                                     FilledButton(
                                       onPressed: () => Navigator.pop(context, true),
-                                      child: const Text('Delete'),
+                                      child: Text(_t('delete_confirm')),
                                     ),
                                   ],
                                 );
@@ -1182,8 +1175,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             (p) => ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.photo_outlined),
-              title: Text(p.caption.isEmpty ? 'Photo #${p.id}' : p.caption),
-              subtitle: Text('Likes ${p.likeCount} · Comments ${p.commentCount}'),
+              title: Text(p.caption.isEmpty ? '${_t('photos')} #${p.id}' : p.caption),
+              subtitle: Text('${_t('likes_count')} ${p.likeCount} · ${_t('comments_count')} ${p.commentCount}'),
             ),
           ),
         const SizedBox(height: 16),
@@ -1198,7 +1191,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               leading: const Icon(Icons.cake_outlined),
               title: Text(r.birthday),
               subtitle: Text(
-                'Notify ${r.notifyDaysBefore} day(s) before · ${r.enabled ? 'Enabled' : 'Disabled'}',
+                '${_t('notify_days_before')}: ${r.notifyDaysBefore} · ${r.enabled ? _t('enabled') : _t('disabled')}',
               ),
             ),
           ),
@@ -1255,7 +1248,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       key: const PageStorageKey<String>('care_tab'),
       padding: const EdgeInsets.all(16),
       children: [
-        Text('Family Status Card', style: Theme.of(context).textTheme.titleMedium),
+        Text(_t('family_status_card'), style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -1284,12 +1277,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               .map((s) => DropdownMenuItem<String>(value: s.$1, child: Text(s.$2)))
               .toList(),
           onChanged: appState.isBusy ? null : (v) => setState(() => _selectedStatusCode = v ?? 'home_safe'),
-          decoration: const InputDecoration(labelText: 'Status'),
+          decoration: InputDecoration(labelText: _t('status')),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _statusNoteController,
-          decoration: const InputDecoration(labelText: 'Note (optional)'),
+          decoration: InputDecoration(labelText: _t('note_optional')),
         ),
         const SizedBox(height: 8),
         OutlinedButton(
@@ -1299,7 +1292,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     statusCode: _selectedStatusCode,
                     note: _statusNoteController.text.trim(),
                   ),
-          child: const Text('Publish Status'),
+          child: Text(_t('publish_status')),
         ),
         const SizedBox(height: 10),
         ...appState.statusUpdates.take(5).map((s) => ListTile(
@@ -1309,19 +1302,19 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               isThreeLine: true,
             )),
         const Divider(height: 28),
-        Text('Voice Mailbox', style: Theme.of(context).textTheme.titleMedium),
+        Text(_t('voice_mailbox'), style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
-        const Text(
-          'Only the sender can rename or delete a voice message.',
-          style: TextStyle(color: Colors.black54),
+        Text(
+          _t('voice_permission_copy'),
+          style: const TextStyle(color: Colors.black54),
         ),
         const SizedBox(height: 8),
         if (appState.hasPendingVoiceUpload) ...[
           Card(
             color: Colors.orange.shade50,
             child: ListTile(
-              title: const Text('Last voice upload did not finish'),
-              subtitle: Text(appState.voiceUploadError ?? 'Network is unstable, retry when ready.'),
+              title: Text(_t('last_voice_upload_failed')),
+              subtitle: Text(appState.voiceUploadError ?? ''),
               trailing: OutlinedButton(
                 onPressed: appState.isBusy || _isUploadingVoice
                     ? null
@@ -1332,11 +1325,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         setState(() => _isUploadingVoice = false);
                         if (appState.error == null) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Voice upload retry succeeded')),
+                            SnackBar(content: Text(_t('voice_upload_retry_succeeded'))),
                           );
                         }
                       },
-                child: const Text('Retry'),
+                child: Text(_t('retry')),
               ),
             ),
           ),
@@ -1344,7 +1337,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         ],
         TextField(
           controller: _voiceTitleController,
-          decoration: const InputDecoration(labelText: 'Title'),
+          decoration: InputDecoration(labelText: _t('title')),
         ),
         const SizedBox(height: 8),
         Row(
@@ -1357,7 +1350,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         ? _stopVoiceRecording
                         : _startVoiceRecording,
                 icon: Icon(_isRecordingVoice ? Icons.stop_circle_outlined : Icons.mic_none),
-                label: Text(_isRecordingVoice ? 'Stop Recording' : 'Start Recording'),
+                label: Text(_isRecordingVoice ? _t('stop_recording') : _t('start_recording')),
               ),
             ),
           ],
@@ -1377,13 +1370,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   final title = _voiceTitleController.text.trim();
                   if (title.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Voice title is required')),
+                      SnackBar(content: Text(_t('voice_title_required'))),
                     );
                     return;
                   }
                   if (_recordedVoicePath == null) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please record audio first')),
+                      SnackBar(content: Text(_t('record_audio_first'))),
                     );
                     return;
                   }
@@ -1401,22 +1394,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   });
                   if (appState.error == null) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Voice uploaded')),
+                      SnackBar(content: Text(_t('voice_uploaded'))),
                     );
                   }
                 },
-          child: Text(_isUploadingVoice ? 'Uploading...' : 'Upload Recorded Voice'),
+          child: Text(_isUploadingVoice ? _t('uploading') : _t('upload_recorded_voice')),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _voiceUrlController,
-          decoration: const InputDecoration(labelText: 'Or manual Audio URL'),
+          decoration: InputDecoration(labelText: _t('manual_audio_url')),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _voiceDurationController,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Duration Seconds (manual)'),
+          decoration: InputDecoration(labelText: _t('duration_seconds_manual')),
         ),
         const SizedBox(height: 8),
         OutlinedButton(
@@ -1427,7 +1420,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     audioUrl: _voiceUrlController.text.trim(),
                     durationSeconds: int.tryParse(_voiceDurationController.text.trim()) ?? 0,
                   ),
-          child: const Text('Add Voice Message By URL'),
+          child: Text(_t('add_voice_by_url')),
         ),
         const SizedBox(height: 10),
         ...appState.voiceMessages.take(5).map((v) => ListTile(
@@ -1481,22 +1474,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               context: context,
                               builder: (context) {
                                 return AlertDialog(
-                                  title: const Text('Rename Voice'),
+                                  title: Text(_t('rename_voice')),
                                   content: TextField(
                                     controller: _editVoiceTitleController,
-                                    decoration: const InputDecoration(labelText: 'Title'),
+                                    decoration: InputDecoration(labelText: _t('title')),
                                   ),
                                   actions: [
                                     TextButton(
                                       onPressed: () => Navigator.pop(context),
-                                      child: const Text('Cancel'),
+                                      child: Text(_t('cancel')),
                                     ),
                                     FilledButton(
                                       onPressed: () => Navigator.pop(
                                         context,
                                         _editVoiceTitleController.text.trim(),
                                       ),
-                                      child: const Text('Save'),
+                                      child: Text(_t('save')),
                                     ),
                                   ],
                                 );
@@ -1515,16 +1508,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               context: context,
                               builder: (context) {
                                 return AlertDialog(
-                                  title: const Text('Delete Voice'),
-                                  content: const Text('Delete this voice message?'),
+                                  title: Text(_t('delete_voice')),
+                                  content: Text(_t('delete_voice_confirm')),
                                   actions: [
                                     TextButton(
                                       onPressed: () => Navigator.pop(context, false),
-                                      child: const Text('Cancel'),
+                                      child: Text(_t('cancel')),
                                     ),
                                     FilledButton(
                                       onPressed: () => Navigator.pop(context, true),
-                                      child: const Text('Delete'),
+                                      child: Text(_t('delete_confirm')),
                                     ),
                                   ],
                                 );
@@ -1544,23 +1537,23 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               ),
             )),
         const Divider(height: 28),
-        Text('Emergency Contact Card', style: Theme.of(context).textTheme.titleMedium),
+        Text(_t('emergency_contact_card'), style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
-        TextField(controller: _contactNameController, decoration: const InputDecoration(labelText: 'Name')),
+        TextField(controller: _contactNameController, decoration: InputDecoration(labelText: _t('name'))),
         const SizedBox(height: 8),
-        TextField(controller: _contactRelationController, decoration: const InputDecoration(labelText: 'Relation')),
+        TextField(controller: _contactRelationController, decoration: InputDecoration(labelText: _t('relation'))),
         const SizedBox(height: 8),
-        TextField(controller: _contactPhoneController, decoration: const InputDecoration(labelText: 'Phone')),
+        TextField(controller: _contactPhoneController, decoration: InputDecoration(labelText: _t('phone'))),
         const SizedBox(height: 8),
-        TextField(controller: _contactCityController, decoration: const InputDecoration(labelText: 'City')),
+        TextField(controller: _contactCityController, decoration: InputDecoration(labelText: _t('city'))),
         const SizedBox(height: 8),
         TextField(
           controller: _contactMedicalController,
-          decoration: const InputDecoration(labelText: 'Medical Notes'),
+          decoration: InputDecoration(labelText: _t('medical_notes')),
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Primary Contact'),
+          title: Text(_t('primary_contact')),
           value: _contactPrimary,
           onChanged: appState.isBusy ? null : (v) => setState(() => _contactPrimary = v),
         ),
@@ -1575,7 +1568,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     medicalNotes: _contactMedicalController.text.trim(),
                     isPrimary: _contactPrimary,
                   ),
-          child: const Text('Save Emergency Contact'),
+          child: Text(_t('save_emergency_contact')),
         ),
         const SizedBox(height: 10),
         ...appState.emergencyContacts.take(5).map((c) => ListTile(
@@ -1597,7 +1590,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             _contactMedicalController.text = c.medicalNotes;
                             setState(() => _contactPrimary = c.isPrimary);
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Loaded into form. Edit then Save.')),
+                              SnackBar(content: Text(_t('loaded_into_form'))),
                             );
                           },
                     icon: const Icon(Icons.edit_outlined),
@@ -1626,16 +1619,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               context: context,
                               builder: (context) {
                                 return AlertDialog(
-                                  title: const Text('Delete Contact'),
-                                  content: const Text('Delete this emergency contact?'),
+                                  title: Text(_t('delete_contact')),
+                                  content: Text(_t('delete_contact_confirm')),
                                   actions: [
                                     TextButton(
                                       onPressed: () => Navigator.pop(context, false),
-                                      child: const Text('Cancel'),
+                                      child: Text(_t('cancel')),
                                     ),
                                     FilledButton(
                                       onPressed: () => Navigator.pop(context, true),
-                                      child: const Text('Delete'),
+                                      child: Text(_t('delete_confirm')),
                                     ),
                                   ],
                                 );
@@ -1650,7 +1643,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               ),
             )),
         const Divider(height: 28),
-        Text('Medical Card', style: Theme.of(context).textTheme.titleMedium),
+        Text(_t('medical_card'), style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         Builder(
           builder: (context) {
@@ -1669,26 +1662,26 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         ),
         TextField(
           controller: _allergiesController,
-          decoration: const InputDecoration(labelText: 'Allergies'),
+          decoration: InputDecoration(labelText: _t('allergies')),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _medicationsController,
-          decoration: const InputDecoration(labelText: 'Common Medications'),
+          decoration: InputDecoration(labelText: _t('common_medications')),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _hospitalsController,
-          decoration: const InputDecoration(labelText: 'Common Hospitals'),
+          decoration: InputDecoration(labelText: _t('common_hospitals')),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _medicalOtherController,
-          decoration: const InputDecoration(labelText: 'Other Notes'),
+          decoration: InputDecoration(labelText: _t('other_notes')),
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Request accompaniment'),
+          title: Text(_t('request_accompaniment')),
           value: _accompanimentRequested,
           onChanged: appState.isBusy ? null : (v) => setState(() => _accompanimentRequested = v),
         ),
@@ -1696,7 +1689,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           const SizedBox(height: 8),
           TextField(
             controller: _accompanimentNoteController,
-            decoration: const InputDecoration(labelText: 'Accompaniment note'),
+            decoration: InputDecoration(labelText: _t('accompaniment_note')),
           ),
         ],
         OutlinedButton(
@@ -1710,13 +1703,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     accompanimentRequested: _accompanimentRequested,
                     accompanimentNote: _accompanimentNoteController.text.trim(),
                   ),
-          child: const Text('Save Medical Card'),
+          child: Text(_t('save_medical_card')),
         ),
         const Divider(height: 28),
-        Text('Smart Care Reminders', style: Theme.of(context).textTheme.titleMedium),
+        Text(_t('smart_care_reminders'), style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         if (appState.careReminders.isEmpty)
-          const Text('No reminders. Family connection is doing great!')
+          Text(_t('no_care_reminders'))
         else
           ...appState.careReminders.map((r) => Card(
                 child: ListTile(
@@ -1889,20 +1882,30 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 value: null,
                 child: Text(_t('system_default')),
               ),
-              const PopupMenuItem<String?>(
+              PopupMenuItem<String?>(
                 value: 'en',
-                child: Text('English'),
+                child: Text(_t('language_en')),
               ),
-              const PopupMenuItem<String?>(
+              PopupMenuItem<String?>(
                 value: 'zh',
-                child: Text('中文'),
+                child: Text(_t('language_zh')),
               ),
-              const PopupMenuItem<String?>(
+              PopupMenuItem<String?>(
                 value: 'ko',
-                child: Text('한국어'),
+                child: Text(_t('language_ko')),
               ),
             ],
           ),
+          if (appState.hasSupabaseSession)
+            IconButton(
+              tooltip: _t('open_cloud_families'),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const SupabaseFamilyScreen()),
+                );
+              },
+              icon: const Icon(Icons.cloud_outlined),
+            ),
           IconButton(
             onPressed: appState.logout,
             icon: const Icon(Icons.logout),

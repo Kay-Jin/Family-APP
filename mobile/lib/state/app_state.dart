@@ -12,9 +12,11 @@ import 'package:family_mobile/models/emergency_contact.dart';
 import 'package:family_mobile/models/care_reminder.dart';
 import 'package:family_mobile/models/medical_card.dart';
 import 'package:family_mobile/util/pending_voice_file.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AppState extends ChangeNotifier {
   final ApiClient _apiClient = ApiClient(baseUrl: _resolveBaseUrl());
@@ -44,8 +46,18 @@ class AppState extends ChangeNotifier {
   Map<String, dynamic>? pendingVoiceUpload;
   String? voiceUploadError;
 
-  bool get isLoggedIn => token != null;
+  StreamSubscription<dynamic>? _authSubscription;
+
+  bool get hasFlaskSession => token != null;
+  bool get hasSupabaseSession => Supabase.instance.client.auth.currentSession != null;
+  bool get isLoggedIn => hasFlaskSession || hasSupabaseSession;
   bool get hasPendingVoiceUpload => pendingVoiceUpload != null;
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
+  }
 
   Future<void> bootstrap() async {
     final prefs = await SharedPreferences.getInstance();
@@ -85,8 +97,43 @@ class AppState extends ChangeNotifier {
         family = null;
       }
     }
+
+    await _authSubscription?.cancel();
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((_) {
+      notifyListeners();
+    });
+
     isLoading = false;
     notifyListeners();
+  }
+
+  Future<void> signInWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    await _runBusy(() async {
+      await Supabase.instance.client.auth.signInWithPassword(
+        email: email.trim(),
+        password: password,
+      );
+    });
+  }
+
+  Future<void> signUpWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    await _runBusy(() async {
+      final res = await Supabase.instance.client.auth.signUp(
+        email: email.trim(),
+        password: password,
+      );
+      if (res.session == null) {
+        throw Exception(
+          'Account created. If email confirmation is enabled in Supabase, open the link in your email, then sign in.',
+        );
+      }
+    });
   }
 
   Future<void> _persistPendingVoiceUpload() async {
@@ -320,6 +367,9 @@ class AppState extends ChangeNotifier {
 
   Future<void> logout() async {
     final pendingVoicePath = pendingVoiceUpload?['file_path'] as String?;
+    try {
+      await Supabase.instance.client.auth.signOut();
+    } catch (_) {}
     token = null;
     userId = null;
     family = null;

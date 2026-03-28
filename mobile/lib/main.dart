@@ -1,12 +1,20 @@
 import 'package:family_mobile/screens/home_screen.dart';
 import 'package:family_mobile/l10n/app_strings.dart';
 import 'package:family_mobile/screens/login_screen.dart';
+import 'package:family_mobile/screens/supabase_family_screen.dart';
 import 'package:family_mobile/state/app_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:family_mobile/supabase/supabase_config.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(
+    url: SupabaseConfig.url,
+    anonKey: SupabaseConfig.anonKey,
+  );
   runApp(const FamilyApp());
 }
 
@@ -88,6 +96,9 @@ class FamilyApp extends StatelessWidget {
               }
               if (!appState.isLoggedIn) {
                 return const LoginScreen();
+              }
+              if (appState.hasSupabaseSession && !appState.hasFlaskSession) {
+                return const SupabaseFamilyScreen();
               }
               return const HomeScreen();
             },

@@ -1,0 +1,232 @@
+import 'package:family_mobile/l10n/app_strings.dart';
+import 'package:family_mobile/supabase/family_repository.dart';
+import 'package:family_mobile/supabase/family_row.dart';
+import 'package:family_mobile/state/app_state.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+class SupabaseFamilyScreen extends StatefulWidget {
+  const SupabaseFamilyScreen({super.key});
+
+  @override
+  State<SupabaseFamilyScreen> createState() => _SupabaseFamilyScreenState();
+}
+
+class _SupabaseFamilyScreenState extends State<SupabaseFamilyScreen> {
+  final _repo = FamilyRepository();
+  final _createController = TextEditingController();
+  final _joinController = TextEditingController();
+  bool _loading = true;
+  String? _error;
+  List<FamilyRow> _families = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  @override
+  void dispose() {
+    _createController.dispose();
+    _joinController.dispose();
+    super.dispose();
+  }
+
+  String _t(String key) => AppStrings.of(context).text(key);
+
+  Future<void> _refresh() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final items = await _repo.listFamilies();
+      setState(() => _families = items);
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _create() async {
+    final name = _createController.text.trim();
+    if (name.isEmpty) return;
+    setState(() => _error = null);
+    try {
+      await _repo.createFamily(name: name);
+      _createController.clear();
+      await _refresh();
+    } catch (e) {
+      setState(() => _error = e.toString());
+    }
+  }
+
+  Future<void> _join() async {
+    final code = _joinController.text.trim();
+    if (code.isEmpty) {
+      setState(() => _error = _t('invite_code_required'));
+      return;
+    }
+    setState(() => _error = null);
+    try {
+      await _repo.joinFamilyByCode(code);
+      _joinController.clear();
+      await _refresh();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_t('join_family'))));
+      }
+    } catch (e) {
+      setState(() => _error = e.toString());
+    }
+  }
+
+  Future<void> _edit(FamilyRow family) async {
+    final controller = TextEditingController(text: family.name);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        final t = AppStrings.of(dialogContext);
+        return AlertDialog(
+          title: Text(t.text('edit')),
+          content: TextField(
+            controller: controller,
+            decoration: InputDecoration(labelText: t.text('name')),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(t.text('cancel'))),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+              child: Text(t.text('save')),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+    if (newName == null || newName.isEmpty) return;
+    setState(() => _error = null);
+    try {
+      await _repo.updateFamily(id: family.id, name: newName);
+      await _refresh();
+    } catch (e) {
+      setState(() => _error = e.toString());
+    }
+  }
+
+  Future<void> _delete(FamilyRow family) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final t = AppStrings.of(dialogContext);
+        return AlertDialog(
+          title: Text(t.text('delete')),
+          content: Text('${family.name}?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text(t.text('cancel'))),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: Text(t.text('delete_confirm'))),
+          ],
+        );
+      },
+    );
+    if (ok != true) return;
+    setState(() => _error = null);
+    try {
+      await _repo.deleteFamily(family.id);
+      await _refresh();
+    } catch (e) {
+      setState(() => _error = e.toString());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_t('cloud_families_title')),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TextButton.icon(
+              onPressed: () => context.read<AppState>().logout(),
+              icon: const Icon(Icons.logout),
+              label: Text(_t('logout')),
+            ),
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            TextField(
+              controller: _createController,
+              decoration: InputDecoration(
+                labelText: _t('new_family_name'),
+              ),
+              onSubmitted: (_) => _create(),
+            ),
+            const SizedBox(height: 8),
+            FilledButton(
+              onPressed: _loading ? null : _create,
+              child: Text(_t('create_family')),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              _t('invite_code_hint_join'),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: const Color(0xFF6D5A51)),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _joinController,
+              decoration: InputDecoration(
+                labelText: _t('invite_code'),
+              ),
+              autocorrect: false,
+              onSubmitted: (_) => _join(),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              onPressed: _loading ? null : _join,
+              child: Text(_t('join_family_supabase')),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(_error!, style: const TextStyle(color: Colors.red)),
+            ],
+            const SizedBox(height: 12),
+            if (_loading) const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+            ..._families.map(
+              (f) => Card(
+                child: ListTile(
+                  title: Text(f.name),
+                  subtitle: Text('${_t('invite_code')}: ${f.inviteCode}'),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        onPressed: _loading ? null : () => _edit(f),
+                        icon: const Icon(Icons.edit_outlined),
+                      ),
+                      IconButton(
+                        onPressed: _loading ? null : () => _delete(f),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (!_loading && _families.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: Text(_t('no_cloud_families'))),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}

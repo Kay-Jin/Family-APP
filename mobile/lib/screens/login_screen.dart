@@ -11,11 +11,17 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   final _nameController = TextEditingController(text: 'Dad');
   final _codeController = TextEditingController(text: 'demo_code');
+  bool _obscurePassword = true;
+  bool _devExpanded = false;
 
   @override
   void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
     _nameController.dispose();
     _codeController.dispose();
     super.dispose();
@@ -48,15 +54,15 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         Row(
                           children: [
-                            CircleAvatar(
+                            const CircleAvatar(
                               radius: 20,
                               backgroundColor: Color(0xFFFFE0D2),
                               child: Icon(Icons.home_rounded, color: Color(0xFF9A4F36)),
                             ),
-                            SizedBox(width: 12),
+                            const SizedBox(width: 12),
                             Text(
                               t.text('welcome_home'),
-                              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+                              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
                             ),
                           ],
                         ),
@@ -69,18 +75,25 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 22),
                         TextField(
-                          controller: _nameController,
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          autocorrect: false,
                           decoration: InputDecoration(
-                            labelText: t.text('display_name'),
-                            prefixIcon: const Icon(Icons.person_outline),
+                            labelText: t.text('auth_email'),
+                            prefixIcon: const Icon(Icons.email_outlined),
                           ),
                         ),
                         const SizedBox(height: 12),
                         TextField(
-                          controller: _codeController,
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
                           decoration: InputDecoration(
-                            labelText: t.text('mock_wechat_code'),
-                            prefixIcon: const Icon(Icons.verified_user_outlined),
+                            labelText: t.text('auth_password'),
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            suffixIcon: IconButton(
+                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                              icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 18),
@@ -89,14 +102,28 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: FilledButton.icon(
                             onPressed: appState.isBusy
                                 ? null
-                                : () => appState.login(
-                                      _codeController.text.trim(),
-                                      _nameController.text.trim(),
+                                : () => appState.signInWithEmail(
+                                      email: _emailController.text,
+                                      password: _passwordController.text,
                                     ),
                             icon: const Icon(Icons.login),
                             label: Text(
-                              appState.isBusy ? t.text('signing_in') : t.text('enter_family_app'),
+                              appState.isBusy ? t.text('signing_in') : t.text('auth_sign_in'),
                             ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: appState.isBusy
+                                ? null
+                                : () => appState.signUpWithEmail(
+                                      email: _emailController.text,
+                                      password: _passwordController.text,
+                                    ),
+                            icon: const Icon(Icons.person_add_outlined),
+                            label: Text(t.text('auth_sign_up')),
                           ),
                         ),
                         if (appState.error != null) ...[
@@ -106,6 +133,50 @@ class _LoginScreenState extends State<LoginScreen> {
                             style: const TextStyle(color: Colors.red),
                           ),
                         ],
+                        const SizedBox(height: 16),
+                        ExpansionTile(
+                          title: Text(
+                            t.text('dev_local_login'),
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                          ),
+                          initiallyExpanded: _devExpanded,
+                          onExpansionChanged: (v) => setState(() => _devExpanded = v),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  TextField(
+                                    controller: _nameController,
+                                    decoration: InputDecoration(
+                                      labelText: t.text('display_name'),
+                                      prefixIcon: const Icon(Icons.person_outline),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextField(
+                                    controller: _codeController,
+                                    decoration: InputDecoration(
+                                      labelText: t.text('mock_wechat_code'),
+                                      prefixIcon: const Icon(Icons.verified_user_outlined),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  FilledButton.tonal(
+                                    onPressed: appState.isBusy
+                                        ? null
+                                        : () => appState.login(
+                                              _codeController.text.trim(),
+                                              _nameController.text.trim(),
+                                            ),
+                                    child: Text(t.text('enter_family_app')),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
