@@ -204,35 +204,58 @@ alter table public.daily_answers enable row level security;
 -- SECURITY DEFINER helpers: plain subqueries on family_members can still see zero rows
 -- under nested RLS during INSERT checks; definer reads membership with explicit uid filter.
 
+-- Bypass RLS only inside these checks so nested policy evaluation cannot hide rows.
 create or replace function public.is_member_of_family(p_family_id uuid)
 returns boolean
-language sql
+language plpgsql
 stable
 security definer
 set search_path = public
 as $$
+declare
+  uid uuid;
+  ok boolean;
+begin
+  uid := auth.uid();
+  if uid is null then
+    return false;
+  end if;
+  set local row_security = off;
   select exists (
     select 1
     from public.family_members fm
     where fm.family_id = p_family_id
-      and fm.user_id = auth.uid()
-  );
+      and fm.user_id = uid
+  ) into ok;
+  return ok;
+end;
 $$;
 
 create or replace function public.is_question_in_my_family(p_question_id uuid)
 returns boolean
-language sql
+language plpgsql
 stable
 security definer
 set search_path = public
 as $$
+declare
+  uid uuid;
+  ok boolean;
+begin
+  uid := auth.uid();
+  if uid is null then
+    return false;
+  end if;
+  set local row_security = off;
   select exists (
     select 1
     from public.daily_questions q
     inner join public.family_members fm on fm.family_id = q.family_id
     where q.id = p_question_id
-      and fm.user_id = auth.uid()
-  );
+      and fm.user_id = uid
+  ) into ok;
+  return ok;
+end;
 $$;
 
 revoke all on function public.is_member_of_family(uuid) from public;
