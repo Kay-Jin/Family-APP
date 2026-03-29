@@ -226,6 +226,8 @@ class AppStrings {
           'New sign-ups are disabled in this Supabase project. Ask the admin to create your user in the Dashboard.',
       'error_auth_weak_password': 'Password is too weak. Choose a stronger one.',
       'error_auth_detail': 'Sign-in: {msg}',
+      'error_auth_backend':
+          'Sign-in service error (server). Try again; if it persists, check Supabase Auth logs or support.',
       'login_first_time_hint':
           'First time? Create jinshanglong@member.family / peimeiling@member.family in Supabase → Users, or tap Sign up with the same email and password.',
       'error_generic': 'Something went wrong. Please try again.',
@@ -685,6 +687,7 @@ class AppStrings {
           '当前项目关闭了自助注册，请管理员在 Supabase 控制台为你添加用户。',
       'error_auth_weak_password': '密码强度不足，请换一个更复杂的密码。',
       'error_auth_detail': '登录提示：{msg}',
+      'error_auth_backend': '登录服务异常（服务端）。请稍后重试；若持续出现请查看 Supabase Auth 日志或工单。',
       'login_first_time_hint':
           '首次使用：请在 Supabase 控制台创建 jinshanglong@member.family 与 peimeiling@member.family，或用相同邮箱密码各点一次「注册」。',
       'error_generic': '操作失败，请稍后重试。',
@@ -1135,6 +1138,8 @@ class AppStrings {
           '이 프로젝트는 가입이 비활성화되어 있습니다. 관리자에게 사용자 생성을 요청하세요.',
       'error_auth_weak_password': '비밀번호가 너무 약합니다. 더 강한 비밀번호를 사용하세요.',
       'error_auth_detail': '로그인: {msg}',
+      'error_auth_backend':
+          '로그인 서버 오류입니다. 잠시 후 다시 시도하세요. 계속되면 Supabase Auth 로그를 확인하세요.',
       'login_first_time_hint':
           '첫 사용: Supabase에서 jinshanglong@member.family / peimeiling@member.family 사용자를 만들거나, 같은 이메일로 가입을 한 번 진행하세요.',
       'error_generic': '문제가 발생했습니다. 잠시 후 다시 시도하세요.',

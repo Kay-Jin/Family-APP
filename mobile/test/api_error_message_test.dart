@@ -27,6 +27,16 @@ void main() {
       expect(apiErrorMessage(Exception('wechat_auth_cancelled'), tr), 'error_wechat_cancelled');
     });
 
+    test('maps Supabase auth backend / schema errors', () {
+      expect(
+        apiErrorMessage(
+          Exception('500: Database error querying schema'),
+          tr,
+        ),
+        'error_auth_backend',
+      );
+    });
+
     test('maps Supabase AuthException', () {
       expect(
         apiErrorMessage(

@@ -31,7 +31,8 @@ class AppState extends ChangeNotifier {
 
   bool isLoading = true;
   bool isBusy = false;
-  String? error;
+  /// Prefer the original exception (e.g. [AuthException]) so [apiErrorMessage] can map codes.
+  Object? error;
 
   String? token;
   int? userId;
@@ -512,7 +513,7 @@ class AppState extends ChangeNotifier {
     try {
       await job();
     } catch (e) {
-      error = e.toString();
+      error = e;
     } finally {
       isBusy = false;
       notifyListeners();

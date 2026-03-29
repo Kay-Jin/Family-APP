@@ -29,6 +29,10 @@ String apiErrorMessage(Object error, String Function(String key) tr) {
   final msg = error.toString();
   final lower = msg.toLowerCase();
 
+  if (lower.contains('database error querying schema')) {
+    return tr('error_auth_backend');
+  }
+
   if (lower.contains('socketexception') ||
       lower.contains('failed host lookup') ||
       lower.contains('network is unreachable') ||
