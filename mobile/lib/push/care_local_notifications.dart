@@ -20,6 +20,15 @@ class CareLocalNotifications {
   static const prefEnabled = 'care_daily_local_reminder_v1';
   static const prefTitle = 'care_notif_title_stored_v1';
   static const prefBody = 'care_notif_body_stored_v1';
+  static const prefHour = 'care_daily_reminder_hour_v1';
+  static const prefMinute = 'care_daily_reminder_minute_v1';
+
+  /// When non-null (set by [DualSessionShell]), notification tap switches to cloud tab instead of pushing a route.
+  static VoidCallback? _dualSessionOpenCloudTab;
+
+  static void registerDualSessionCloudTabHandler(VoidCallback? fn) {
+    _dualSessionOpenCloudTab = fn;
+  }
 
   /// Payload on scheduled notifications; tap opens [SupabaseFamilyScreen] when signed in.
   static const payloadOpenCloudFamilies = 'open_cloud_families';
@@ -31,9 +40,15 @@ class CareLocalNotifications {
   }
 
   static void _openCloudFamiliesIfSignedIn() {
+    if (Supabase.instance.client.auth.currentSession == null) return;
+    if (_dualSessionOpenCloudTab != null) {
+      _dualSessionOpenCloudTab!();
+      return;
+    }
     final nav = _navigatorKey?.currentState;
     if (nav == null) return;
-    if (Supabase.instance.client.auth.currentSession == null) return;
+    // Cloud-only root: already on list; avoid stacking another [SupabaseFamilyScreen].
+    if (!nav.canPop()) return;
     nav.push(MaterialPageRoute<void>(builder: (_) => const SupabaseFamilyScreen()));
   }
 
@@ -99,6 +114,25 @@ class CareLocalNotifications {
     return p.getBool(prefEnabled) ?? false;
   }
 
+  static Future<TimeOfDay> getReminderTime() async {
+    final p = await SharedPreferences.getInstance();
+    final h = (p.getInt(prefHour) ?? 10).clamp(0, 23);
+    final m = (p.getInt(prefMinute) ?? 0).clamp(0, 59);
+    return TimeOfDay(hour: h, minute: m);
+  }
+
+  /// Persists hour/minute and reschedules if the daily reminder is on.
+  static Future<void> setReminderTime({required int hour, required int minute}) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setInt(prefHour, hour.clamp(0, 23));
+    await p.setInt(prefMinute, minute.clamp(0, 59));
+    if (p.getBool(prefEnabled) != true) return;
+    final title = p.getString(prefTitle);
+    final body = p.getString(prefBody);
+    if (title == null || body == null || title.isEmpty || body.isEmpty) return;
+    await _scheduleDaily(title: title, body: body);
+  }
+
   static Future<void> setEnabled({
     required bool enabled,
     required String title,
@@ -138,8 +172,11 @@ class CareLocalNotifications {
 
   static Future<void> _scheduleDaily({required String title, required String body}) async {
     if (kIsWeb) return;
+    final p = await SharedPreferences.getInstance();
+    final hh = (p.getInt(prefHour) ?? 10).clamp(0, 23);
+    final mm = (p.getInt(prefMinute) ?? 0).clamp(0, 59);
     final now = tz.TZDateTime.now(tz.local);
-    var scheduled = tz.TZDateTime(tz.local, now.year, now.month, now.day, 10, 0);
+    var scheduled = tz.TZDateTime(tz.local, now.year, now.month, now.day, hh, mm);
     if (!scheduled.isAfter(now)) {
       scheduled = scheduled.add(const Duration(days: 1));
     }

@@ -26,6 +26,7 @@ class _SupabaseFamilyScreenState extends State<SupabaseFamilyScreen> {
   List<FamilyRow> _families = [];
   bool _dailyReminder = false;
   bool _dailyReminderPrefLoaded = false;
+  TimeOfDay _reminderTime = const TimeOfDay(hour: 10, minute: 0);
 
   @override
   void initState() {
@@ -37,12 +38,29 @@ class _SupabaseFamilyScreenState extends State<SupabaseFamilyScreen> {
   Future<void> _loadDailyReminderPref() async {
     if (kIsWeb) return;
     final v = await CareLocalNotifications.isEnabled();
+    final t = await CareLocalNotifications.getReminderTime();
     if (mounted) {
       setState(() {
         _dailyReminder = v;
+        _reminderTime = t;
         _dailyReminderPrefLoaded = true;
       });
     }
+  }
+
+  Future<void> _pickReminderTime() async {
+    if (kIsWeb) return;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _reminderTime,
+    );
+    if (picked == null || !mounted) return;
+    await CareLocalNotifications.setReminderTime(hour: picked.hour, minute: picked.minute);
+    if (!mounted) return;
+    setState(() => _reminderTime = picked);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(_t('snack_reminder_time_updated'))),
+    );
   }
 
   Future<void> _setDailyReminder(bool value) async {
@@ -263,6 +281,16 @@ class _SupabaseFamilyScreenState extends State<SupabaseFamilyScreen> {
                 ),
                 value: _dailyReminder,
                 onChanged: _setDailyReminder,
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.schedule_rounded),
+                title: Text(_t('care_daily_reminder_time')),
+                subtitle: Text(
+                  '${_reminderTime.format(context)} · ${_t('care_daily_reminder_tap_change')}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: const Color(0xFF6D5A51)),
+                ),
+                onTap: _pickReminderTime,
               ),
             ],
             if (_error != null) ...[

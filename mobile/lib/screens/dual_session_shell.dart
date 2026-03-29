@@ -1,4 +1,5 @@
 import 'package:family_mobile/l10n/app_strings.dart';
+import 'package:family_mobile/push/care_local_notifications.dart';
 import 'package:family_mobile/screens/home_screen.dart';
 import 'package:family_mobile/screens/supabase_family_screen.dart';
 import 'package:flutter/material.dart';
@@ -22,7 +23,19 @@ class _DualSessionShellState extends State<DualSessionShell> {
   @override
   void initState() {
     super.initState();
+    CareLocalNotifications.registerDualSessionCloudTabHandler(_switchToCloudTab);
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowCloudTip());
+  }
+
+  void _switchToCloudTab() {
+    if (!mounted) return;
+    setState(() => _index = 1);
+  }
+
+  @override
+  void dispose() {
+    CareLocalNotifications.registerDualSessionCloudTabHandler(null);
+    super.dispose();
   }
 
   Future<void> _maybeShowCloudTip() async {
