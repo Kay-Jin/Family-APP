@@ -1,0 +1,6 @@
+# Supabase CLI project config (optional).
+# Replace with your project ref after `supabase link`, or pass --project-ref on deploy.
+project_id = "your-project-ref"
+
+[functions.send-fcm-push]
+verify_jwt = false

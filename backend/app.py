@@ -21,9 +21,13 @@ UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 app = Flask(__name__)
-JWT_SECRET = "dev-secret-change-me"
 JWT_ALG = "HS256"
 JWT_EXPIRE_DAYS = 30
+
+
+def jwt_secret() -> str:
+    """Sign local API tokens; override in production via JWT_SECRET."""
+    return os.environ.get("JWT_SECRET", "dev-secret-change-me")
 
 
 def get_db():
@@ -167,7 +171,7 @@ def auth_user_id():
         return None
     token = auth.replace("Bearer ", "", 1).strip()
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+        payload = jwt.decode(token, jwt_secret(), algorithms=[JWT_ALG])
         return int(payload["user_id"])
     except Exception:
         return None
@@ -199,12 +203,26 @@ def health():
     return jsonify({"status": "ok"})
 
 
-def _wechat_union_id_from_code(code: str) -> str:
-    """Exchange WeChat OAuth code for a stable id (unionid preferred)."""
+def _wechat_oauth_exchange(code: str) -> dict:
+    """
+    Exchange WeChat mobile OAuth `code` for a stable union_id and optional profile.
+
+    Returns dict: union_id, nickname (optional), avatar_url (optional).
+    """
+    code = (code or "").strip()
+    if not code:
+        raise ValueError("code is required")
     if code == "demo_wechat":
-        return "demo_wechat_union"
+        return {"union_id": "demo_wechat_union", "nickname": "Demo WeChat", "avatar_url": None}
+
     app_id = os.environ.get("WECHAT_APP_ID", "").strip()
     app_secret = os.environ.get("WECHAT_APP_SECRET", "").strip()
+
+    # Pytest runs without WeChat credentials: deterministic ids, no network.
+    if os.environ.get("PYTEST_CURRENT_TEST") and not (app_id and app_secret):
+        digest = hashlib.sha256(code.encode("utf-8")).hexdigest()[:32]
+        return {"union_id": f"pytest_wx_{digest}", "nickname": None, "avatar_url": None}
+
     if not app_id or not app_secret:
         raise ValueError(
             "WeChat app is not configured. Set WECHAT_APP_ID and WECHAT_APP_SECRET, "
@@ -223,13 +241,35 @@ def _wechat_union_id_from_code(code: str) -> str:
     data = r.json()
     if data.get("errcode"):
         raise ValueError(data.get("errmsg") or "wechat token error")
-    unionid = data.get("unionid")
     openid = data.get("openid")
-    if unionid:
-        return str(unionid)
-    if openid:
-        return f"openid_{openid}"
-    raise ValueError("WeChat response missing openid")
+    if not openid:
+        raise ValueError("WeChat response missing openid")
+    access_token = data.get("access_token")
+    unionid = data.get("unionid")
+    union_id = str(unionid) if unionid else f"openid_{openid}"
+
+    nickname = None
+    avatar_url = None
+    if access_token:
+        try:
+            r2 = requests.get(
+                "https://api.weixin.qq.com/sns/userinfo",
+                params={"access_token": access_token, "openid": openid, "lang": "zh_CN"},
+                timeout=10,
+            )
+            info = r2.json()
+            if not info.get("errcode"):
+                nickname = info.get("nickname")
+                avatar_url = info.get("headimgurl")
+        except requests.RequestException:
+            pass
+
+    return {"union_id": union_id, "nickname": nickname, "avatar_url": avatar_url}
+
+
+def _wechat_union_id_from_code(code: str) -> str:
+    """Exchange WeChat OAuth code for a stable id (unionid preferred)."""
+    return _wechat_oauth_exchange(code)["union_id"]
 
 
 def _wechat_synthetic_email(union_id: str) -> str:
@@ -238,7 +278,7 @@ def _wechat_synthetic_email(union_id: str) -> str:
 
 
 def _wechat_derived_password(union_id: str) -> str:
-    secret = os.environ.get("WECHAT_DERIVE_SECRET", JWT_SECRET).encode("utf-8")
+    secret = os.environ.get("WECHAT_DERIVE_SECRET", jwt_secret()).encode("utf-8")
     return hmac.new(secret, union_id.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
 
 
@@ -300,7 +340,7 @@ def wechat_supabase_login():
     """
     Mobile WeChat SDK returns a one-time `code`; this route exchanges it (via WeChat API),
     ensures a Supabase user exists, and returns access_token + refresh_token for the app.
-    Use code \"demo_wechat\" when WECHAT_APP_ID is not set (local demo).
+    Use code "demo_wechat" for a local demo, or run tests without WeChat credentials (synthetic union ids).
     """
     payload = request.get_json(force=True)
     code = (payload.get("code") or "").strip()
@@ -327,16 +367,23 @@ def wechat_supabase_login():
 @app.route("/auth/wechat-login", methods=["POST"])
 def wechat_login():
     payload = request.get_json(force=True)
-    code = payload.get("code")
+    code = (payload.get("code") or "").strip()
     if not code:
         return jsonify({"error": "code is required"}), 400
+    try:
+        wx = _wechat_oauth_exchange(code)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except requests.RequestException as e:
+        return jsonify({"error": f"upstream request failed: {e}"}), 502
+
+    union_id = wx["union_id"]
+    display_name = (payload.get("display_name") or wx.get("nickname") or "WeChat User").strip() or "WeChat User"
+    avatar_url = payload.get("avatar_url") or wx.get("avatar_url")
 
     db = get_db()
-    union_id = f"wx_{code}"  # TODO: replace with real WeChat code exchange.
     user = db.execute("SELECT * FROM users WHERE union_id = ?", (union_id,)).fetchone()
     if user is None:
-        display_name = payload.get("display_name", "New Member")
-        avatar_url = payload.get("avatar_url")
         db.execute(
             """
             INSERT INTO users (union_id, display_name, avatar_url, created_at)
@@ -357,7 +404,7 @@ def wechat_login():
                     "union_id": user["union_id"],
                     "exp": datetime.now(timezone.utc) + timedelta(days=JWT_EXPIRE_DAYS),
                 },
-                JWT_SECRET,
+                jwt_secret(),
                 algorithm=JWT_ALG,
             ),
         }

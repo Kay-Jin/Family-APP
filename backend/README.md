@@ -2,7 +2,7 @@
 
 This is a starter backend for your family app, focused on V1.0 features:
 
-- WeChat login (mock flow placeholder)
+- WeChat login (`POST /auth/wechat-login` exchanges the mobile SDK `code` with WeChat when `WECHAT_APP_ID` / `WECHAT_APP_SECRET` are set; `demo_wechat` still works for local demos; pytest uses synthetic unions without credentials)
 - Family creation and join
 - Daily question and answers
 - Photo feed, comments, likes
@@ -30,12 +30,14 @@ Open:
 
 ## Auth usage
 
-1. Call `POST /auth/wechat-login` first and copy `token`
+1. Call `POST /auth/wechat-login` first and copy `token` (JWT, HS256).
 2. Add header for other business APIs:
 
 ```text
 Authorization: Bearer <token>
 ```
+
+Set **`JWT_SECRET`** in production (see `.env.example`). Default `dev-secret-change-me` is only for local use.
 
 ## 3) API quick path (suggested order)
 
@@ -50,9 +52,9 @@ Authorization: Bearer <token>
 
 ## 4) Production TODOs
 
-- Replace mock WeChat login with real code exchange and token verification
-- Add auth middleware (JWT)
+- ~~WeChat code exchange~~: implemented for `/auth/wechat-login` and `/auth/wechat-supabase` when env credentials are set.
+- ~~JWT on business routes~~: use `Authorization: Bearer` + `JWT_SECRET`; rotate the secret per environment.
 - Add migration tool (Alembic or Flyway style migration scripts)
 - Move from SQLite to MySQL
-- Integrate push service (JPush or cloud push). For **Supabase-signed-in** clients, prefer storing tokens in `public.device_push_tokens` (see repo `supabase/migrations/20260403_device_push_tokens.sql`) and sending from Edge Functions or your push worker—not this Flask SQLite API.
-- Add CI/CD and tests
+- **Supabase push**: store tokens in `public.device_push_tokens` and call the repo Edge Function `send-fcm-push` (see `../supabase/README.md`) or your own worker—do not send FCM from this Flask app unless you also load Firebase admin credentials here.
+- Add CI/CD and broaden automated tests
