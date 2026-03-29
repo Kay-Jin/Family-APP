@@ -53,6 +53,9 @@ class FakeCareFamilyRepository implements CareFamilyRepository {
   Future<void> deleteVoiceMessage(String messageId, String storagePath) async {}
 
   @override
+  Future<void> updateVoiceTitle(String messageId, String newTitle) async {}
+
+  @override
   Future<CloudMedicalCard?> getMedicalCard(String familyId, String userId) async => null;
 
   @override

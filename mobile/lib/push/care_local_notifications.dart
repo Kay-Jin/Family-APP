@@ -1,6 +1,9 @@
+import 'package:family_mobile/screens/supabase_family_screen.dart';
 import 'package:flutter/foundation.dart' show debugPrint, defaultTargetPlatform, kIsWeb, TargetPlatform;
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -10,11 +13,53 @@ class CareLocalNotifications {
 
   static final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
 
+  static bool _initialized = false;
+
   static const _channelId = 'family_care_daily';
   static const _notifId = 94001;
   static const prefEnabled = 'care_daily_local_reminder_v1';
   static const prefTitle = 'care_notif_title_stored_v1';
   static const prefBody = 'care_notif_body_stored_v1';
+
+  /// Payload on scheduled notifications; tap opens [SupabaseFamilyScreen] when signed in.
+  static const payloadOpenCloudFamilies = 'open_cloud_families';
+
+  static GlobalKey<NavigatorState>? _navigatorKey;
+
+  static void attachNavigator(GlobalKey<NavigatorState> key) {
+    _navigatorKey = key;
+  }
+
+  static void _openCloudFamiliesIfSignedIn() {
+    final nav = _navigatorKey?.currentState;
+    if (nav == null) return;
+    if (Supabase.instance.client.auth.currentSession == null) return;
+    nav.push(MaterialPageRoute<void>(builder: (_) => const SupabaseFamilyScreen()));
+  }
+
+  static void onNotificationTapped(NotificationResponse response) {
+    if (response.payload != payloadOpenCloudFamilies) return;
+    _openCloudFamiliesIfSignedIn();
+  }
+
+  /// After first frame (e.g. cold start from notification). Retries briefly while auth restores.
+  static Future<void> handleLaunchNotificationIfAny() async {
+    if (kIsWeb || !_initialized) return;
+    try {
+      final details = await _plugin.getNotificationAppLaunchDetails();
+      final r = details?.notificationResponse;
+      if (r?.payload != payloadOpenCloudFamilies) return;
+      for (var i = 0; i < 8; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+        if (Supabase.instance.client.auth.currentSession != null) {
+          _openCloudFamiliesIfSignedIn();
+          return;
+        }
+      }
+    } catch (e, st) {
+      debugPrint('CareLocalNotifications.handleLaunchNotificationIfAny: $e\n$st');
+    }
+  }
 
   static Future<void> ensureInitialized() async {
     if (kIsWeb) return;
@@ -32,7 +77,10 @@ class CareLocalNotifications {
       requestSoundPermission: true,
     );
     const initSettings = InitializationSettings(android: androidInit, iOS: iosInit);
-    await _plugin.initialize(initSettings);
+    await _plugin.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: onNotificationTapped,
+    );
 
     final android = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
     await android?.createNotificationChannel(
@@ -43,6 +91,7 @@ class CareLocalNotifications {
         importance: Importance.defaultImportance,
       ),
     );
+    _initialized = true;
   }
 
   static Future<bool> isEnabled() async {
@@ -113,6 +162,7 @@ class CareLocalNotifications {
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: DateTimeComponents.time,
+      payload: payloadOpenCloudFamilies,
     );
   }
 }

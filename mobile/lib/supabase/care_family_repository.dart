@@ -37,6 +37,8 @@ abstract class CareFamilyRepository {
 
   Future<void> deleteVoiceMessage(String messageId, String storagePath);
 
+  Future<void> updateVoiceTitle(String messageId, String newTitle);
+
   Future<CloudMedicalCard?> getMedicalCard(String familyId, String userId);
 
   Future<List<CloudMedicalCard>> listMedicalCardsForFamily(String familyId);

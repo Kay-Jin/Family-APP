@@ -468,6 +468,45 @@ class _SupabaseFamilyCarePanelState extends State<SupabaseFamilyCarePanel> {
     }
   }
 
+  Future<void> _renameVoice(CloudFamilyVoiceMessage v) async {
+    final ctrl = TextEditingController(text: v.title);
+    final newTitle = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text(_t('rename_voice')),
+          content: TextField(
+            controller: ctrl,
+            decoration: InputDecoration(labelText: _t('title')),
+            autofocus: true,
+            onSubmitted: (_) => Navigator.pop(ctx, ctrl.text.trim()),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(_t('cancel'))),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+              child: Text(_t('save')),
+            ),
+          ],
+        );
+      },
+    );
+    ctrl.dispose();
+    if (!mounted) return;
+    if (newTitle == null || newTitle.isEmpty || newTitle == v.title) return;
+    try {
+      await _repo.updateVoiceTitle(v.id, newTitle);
+      await _refresh();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_t('snack_voice_title_updated'))));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(apiErrorMessage(e, _t))));
+      }
+    }
+  }
+
   Future<void> _deleteVoice(CloudFamilyVoiceMessage v) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -794,11 +833,16 @@ class _SupabaseFamilyCarePanelState extends State<SupabaseFamilyCarePanel> {
             icon: Icon(_playingVoiceId == v.id ? Icons.pause_circle_outline : Icons.play_circle_outline),
             onPressed: () => _playVoice(v),
           ),
-          if (own)
+          if (own) ...[
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () => _renameVoice(v),
+            ),
             IconButton(
               icon: const Icon(Icons.delete_outline),
               onPressed: () => _deleteVoice(v),
             ),
+          ],
         ],
       ),
     );

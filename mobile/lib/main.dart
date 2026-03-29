@@ -22,7 +22,11 @@ Future<void> main() async {
     url: SupabaseConfig.url,
     anonKey: SupabaseConfig.anonKey,
   );
+  GlobalKey<NavigatorState>? appNavigatorKey;
   if (!kIsWeb) {
+    final navKey = GlobalKey<NavigatorState>();
+    appNavigatorKey = navKey;
+    CareLocalNotifications.attachNavigator(navKey);
     await CareLocalNotifications.ensureInitialized();
     await CareLocalNotifications.rescheduleIfEnabled();
   }
@@ -31,11 +35,26 @@ Future<void> main() async {
     await WechatAuthService.instance.prepare();
     unawaited(FcmTokenSync.register());
   }
-  runApp(const FamilyApp());
+  runApp(FamilyApp(navigatorKey: appNavigatorKey));
 }
 
-class FamilyApp extends StatelessWidget {
-  const FamilyApp({super.key});
+class FamilyApp extends StatefulWidget {
+  const FamilyApp({super.key, this.navigatorKey});
+
+  final GlobalKey<NavigatorState>? navigatorKey;
+
+  @override
+  State<FamilyApp> createState() => _FamilyAppState();
+}
+
+class _FamilyAppState extends State<FamilyApp> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      CareLocalNotifications.handleLaunchNotificationIfAny();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +62,7 @@ class FamilyApp extends StatelessWidget {
       create: (_) => AppState()..bootstrap(),
       child: Consumer<AppState>(
         builder: (context, appState, _) => MaterialApp(
+          navigatorKey: widget.navigatorKey,
           locale: appState.localeCode == null ? null : Locale(appState.localeCode!),
           onGenerateTitle: (context) => AppStrings.of(context).text('app_title'),
           supportedLocales: AppStrings.supportedLocales,
