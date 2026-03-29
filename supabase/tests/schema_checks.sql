@@ -15,7 +15,10 @@ WITH
   exp_tables AS (
     SELECT unnest(ARRAY[
       'families', 'family_members', 'daily_questions', 'daily_answers', 'family_photos',
-      'family_photo_likes', 'family_photo_comments', 'device_push_tokens'
+      'family_photo_likes', 'family_photo_comments',
+      'family_status_posts', 'family_voice_messages', 'family_medical_cards',
+      'family_birthday_reminders', 'family_care_preferences', 'family_care_presence',
+      'device_push_tokens'
     ]) AS t
   ),
   missing_tables AS (
@@ -40,7 +43,10 @@ WITH
       AND c.relkind = 'r'
       AND c.relname IN (
         'families', 'family_members', 'daily_questions', 'daily_answers', 'family_photos',
-        'family_photo_likes', 'family_photo_comments', 'device_push_tokens'
+        'family_photo_likes', 'family_photo_comments',
+        'family_status_posts', 'family_voice_messages', 'family_medical_cards',
+        'family_birthday_reminders', 'family_care_preferences', 'family_care_presence',
+        'device_push_tokens'
       )
       AND c.relrowsecurity IS NOT TRUE
   ),
@@ -55,6 +61,12 @@ WITH
         ('family_photos', ARRAY['id', 'family_id', 'user_id', 'caption', 'image_path', 'uploader_display_name', 'created_at']),
         ('family_photo_likes', ARRAY['photo_id', 'user_id', 'created_at']),
         ('family_photo_comments', ARRAY['id', 'photo_id', 'user_id', 'body', 'author_display_name', 'created_at']),
+        ('family_status_posts', ARRAY['id', 'family_id', 'user_id', 'author_display_name', 'status_code', 'note', 'created_at']),
+        ('family_voice_messages', ARRAY['id', 'family_id', 'user_id', 'author_display_name', 'title', 'storage_path', 'duration_seconds', 'created_at']),
+        ('family_medical_cards', ARRAY['family_id', 'user_id', 'display_name', 'allergies', 'medications', 'hospitals', 'emergency_contact_name', 'emergency_contact_phone', 'accompaniment_note', 'updated_at']),
+        ('family_birthday_reminders', ARRAY['id', 'family_id', 'created_by', 'person_name', 'month', 'day', 'notify_days_before', 'created_at']),
+        ('family_care_preferences', ARRAY['user_id', 'family_id', 'gentle_radar_enabled', 'share_care_presence', 'updated_at']),
+        ('family_care_presence', ARRAY['family_id', 'user_id', 'last_care_tab_at']),
         ('device_push_tokens', ARRAY['id', 'user_id', 'token', 'platform', 'updated_at'])
     ) AS spec(tbl, cols)
     CROSS JOIN LATERAL unnest(spec.cols) AS c(col)
@@ -151,6 +163,18 @@ WITH
         AND b.file_size_limit = 10485760
     )
   ),
+  storage_bucket_voice AS (
+    SELECT
+      'storage_bucket_family_voice_messages' AS check_id,
+      'storage.buckets row id=family_voice_messages missing, not private, or wrong size limit' AS detail
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM storage.buckets b
+      WHERE b.id = 'family_voice_messages'
+        AND b.public IS FALSE
+        AND b.file_size_limit = 20971520
+    )
+  ),
   storage_policies AS (
     SELECT *
     FROM (VALUES
@@ -193,6 +217,27 @@ WITH
       format('storage.objects policy %I missing', name) AS detail
     FROM storage_policies_album
   ),
+  storage_policies_voice AS (
+    SELECT *
+    FROM (VALUES
+      ('voice_messages_select_member'),
+      ('voice_messages_insert_own'),
+      ('voice_messages_delete_own')
+    ) AS p(name)
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM pg_policies pol
+      WHERE pol.schemaname = 'storage'
+        AND pol.tablename = 'objects'
+        AND pol.policyname = p.name
+    )
+  ),
+  storage_policies_voice_flat AS (
+    SELECT
+      'missing_storage_policy_' || name AS check_id,
+      format('storage.objects policy %I missing', name) AS detail
+    FROM storage_policies_voice
+  ),
   failures AS (
     SELECT * FROM missing_tables
     UNION ALL SELECT * FROM rls_off
@@ -203,8 +248,10 @@ WITH
     UNION ALL SELECT * FROM join_rpc_not_granted
     UNION ALL SELECT * FROM storage_bucket
     UNION ALL SELECT * FROM storage_bucket_album
+    UNION ALL SELECT * FROM storage_bucket_voice
     UNION ALL SELECT * FROM storage_policies_flat
     UNION ALL SELECT * FROM storage_policies_album_flat
+    UNION ALL SELECT * FROM storage_policies_voice_flat
   )
 SELECT
   (SELECT count(*)::int FROM failures) AS failed_count,

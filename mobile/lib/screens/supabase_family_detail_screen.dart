@@ -1,6 +1,7 @@
 import 'package:family_mobile/l10n/app_strings.dart';
 import 'package:family_mobile/widgets/cloud_empty_placeholder.dart';
 import 'package:family_mobile/screens/supabase_cloud_album_panel.dart';
+import 'package:family_mobile/screens/supabase_family_care_panel.dart';
 import 'package:family_mobile/supabase/cloud_daily_answer.dart';
 import 'package:family_mobile/supabase/cloud_daily_question.dart';
 import 'package:family_mobile/supabase/daily_repository.dart';
@@ -195,7 +196,7 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: Text(widget.family.name),
@@ -203,6 +204,7 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
             tabs: [
               Tab(text: _t('daily_questions')),
               Tab(text: _t('photos_title')),
+              Tab(text: _t('care_tab_title')),
             ],
           ),
         ),
@@ -262,6 +264,7 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
                     ),
                   ),
                   SupabaseCloudAlbumPanel(familyId: widget.family.id),
+                  SupabaseFamilyCarePanel(familyId: widget.family.id),
                 ],
               ),
             ),
