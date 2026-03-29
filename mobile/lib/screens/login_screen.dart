@@ -1,3 +1,4 @@
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:family_mobile/config/flask_api_config.dart';
 import 'package:family_mobile/state/app_state.dart';
 import 'package:family_mobile/l10n/app_strings.dart';
@@ -52,13 +53,18 @@ class _LoginScreenState extends State<LoginScreen> {
   final _flaskUrlController = TextEditingController();
   bool _obscurePassword = true;
   bool _devExpanded = false;
+  bool _iosPhysicalDevice = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       _flaskUrlController.text = context.read<AppState>().flaskBaseUrl;
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+        final ios = await DeviceInfoPlugin().iosInfo;
+        if (mounted) setState(() => _iosPhysicalDevice = ios.isPhysicalDevice);
+      }
     });
   }
 
@@ -256,6 +262,35 @@ class _LoginScreenState extends State<LoginScreen> {
                           Text(
                             apiErrorMessage(appState.error!, (k) => t.text(k)),
                             style: const TextStyle(color: Colors.red),
+                          ),
+                        ],
+                        if (_iosPhysicalDevice) ...[
+                          const SizedBox(height: 14),
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF3E0),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFFFFB74D)),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(Icons.phone_iphone, color: Color(0xFFE65100), size: 22),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      t.text('ios_physical_flask_banner'),
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            color: const Color(0xFF5D4037),
+                                            height: 1.4,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                         const SizedBox(height: 16),

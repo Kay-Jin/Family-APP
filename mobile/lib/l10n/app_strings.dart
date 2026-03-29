@@ -41,6 +41,8 @@ class AppStrings {
       'flask_backend_clear': 'Use defaults',
       'flask_backend_saved': 'Saved. Sign in again if you were logged in.',
       'flask_backend_current': 'Active: {url}',
+      'ios_physical_flask_banner':
+          'On a real iPhone, 127.0.0.1 will not reach your Mac or PC. Expand “Local Flask API” below and enter your home server URL, e.g. http://192.168.1.10:8000 (same Wi‑Fi).',
       'cloud_families_title': 'Cloud families',
       'invite_code_hint_join': 'Invite code from a family owner',
       'open_cloud_families': 'Cloud',
@@ -485,6 +487,8 @@ class AppStrings {
       'flask_backend_clear': '恢复默认',
       'flask_backend_saved': '已保存。若曾登录请先重新登录。',
       'flask_backend_current': '当前：{url}',
+      'ios_physical_flask_banner':
+          '全家用的 iPhone 真机不能填 127.0.0.1。请展开下方「本地 Flask 后端」，填写家里 Mac 或电脑的局域网地址，例如 http://192.168.1.10:8000（须与手机同一 Wi‑Fi）。',
       'cloud_families_title': '云端家庭',
       'invite_code_hint_join': '向家人索取邀请码',
       'open_cloud_families': '云端',
@@ -915,6 +919,8 @@ class AppStrings {
       'flask_backend_clear': '기본값',
       'flask_backend_saved': '저장됨. 로그인했다면 다시 로그인하세요.',
       'flask_backend_current': '사용 중: {url}',
+      'ios_physical_flask_banner':
+          '실제 아이폰에서는 127.0.0.1로 집의 Mac/PC에 연결할 수 없습니다. 아래 "로컬 Flask API"를 펼쳐 같은 Wi‑Fi의 서버 주소를 입력하세요. 예: http://192.168.1.10:8000',
       'cloud_families_title': '클라우드 가족',
       'invite_code_hint_join': '가족 관리자에게 초대 코드를 받으세요',
       'open_cloud_families': '클라우드',
