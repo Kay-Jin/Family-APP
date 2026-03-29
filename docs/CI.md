@@ -55,6 +55,7 @@ CI（Continuous Integration）会在你**推送代码**或**发起 Pull Request*
 - [`supabase/migrations/20260330_family_album_engagement.sql`](../supabase/migrations/20260330_family_album_engagement.sql)（相册点赞与评论）
 - [`supabase/migrations/20260331_family_photos_with_counts_view.sql`](../supabase/migrations/20260331_family_photos_with_counts_view.sql)（相册列表聚合视图 `family_photos_with_counts`）
 - [`supabase/migrations/20260401_family_album_private_bucket.sql`](../supabase/migrations/20260401_family_album_private_bucket.sql)（`family_album_images` 改为私有桶；客户端用签名 URL）
+- [`supabase/migrations/20260402_answer_images_private_bucket.sql`](../supabase/migrations/20260402_answer_images_private_bucket.sql)（`family_answer_images` 改为私有桶；每日回答配图签名 URL）
 
 执行后再跑一次检查，直到 `failed_count = 0`。完整基线仍以 [`supabase/schema.sql`](../supabase/schema.sql) 为准。
 

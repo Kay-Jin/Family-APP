@@ -14,7 +14,7 @@ class CloudDailyAnswer {
   final String userId;
   final String userDisplayName;
   final String answerText;
-  /// Storage object path in bucket `family_answer_images` (not a full URL).
+  /// Object path in private bucket `family_answer_images` (use signed URL in UI).
   final String? imagePath;
   final String createdAt;
 

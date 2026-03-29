@@ -11,9 +11,22 @@ class DailyRepository {
 
   static const _answerImageBucket = 'family_answer_images';
 
-  String? answerImagePublicUrl(String? storagePath) {
-    if (storagePath == null || storagePath.isEmpty) return null;
-    return _client.storage.from(_answerImageBucket).getPublicUrl(storagePath);
+  static const signedAnswerImageUrlExpirySeconds = 3600;
+
+  Future<String> signedAnswerImageUrl(String storagePath) async {
+    return _client.storage.from(_answerImageBucket).createSignedUrl(storagePath, signedAnswerImageUrlExpirySeconds);
+  }
+
+  /// One signed URL per distinct path; failed paths are omitted.
+  Future<Map<String, String>> signedAnswerImageUrls(Iterable<String?> paths) async {
+    final out = <String, String>{};
+    for (final p in paths.toSet()) {
+      if (p == null || p.isEmpty) continue;
+      try {
+        out[p] = await signedAnswerImageUrl(p);
+      } catch (_) {}
+    }
+    return out;
   }
 
   Future<List<CloudDailyQuestion>> listQuestions(String familyId) async {

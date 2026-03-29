@@ -521,11 +521,12 @@ grant select on public.family_photos_with_counts to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Storage: answer images (path = {family_id}/{user_id}/{filename})
--- Public bucket so Image.network(publicUrl) works; upload/delete restricted by RLS.
+-- Private bucket; clients use signed URLs. Upload/delete restricted by RLS.
 -- ---------------------------------------------------------------------------
 
+-- Private: answer thumbnails use signed URLs in the app (see DailyRepository).
 insert into storage.buckets (id, name, public, file_size_limit)
-values ('family_answer_images', 'family_answer_images', true, 10485760)
+values ('family_answer_images', 'family_answer_images', false, 10485760)
 on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit;
 
 drop policy if exists "answer_images_select_member" on storage.objects;

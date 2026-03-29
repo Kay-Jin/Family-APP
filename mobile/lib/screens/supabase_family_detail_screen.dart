@@ -31,6 +31,7 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
 
   List<CloudDailyQuestion> _questions = [];
   final Map<String, List<CloudDailyAnswer>> _answers = {};
+  final Map<String, String> _answerImageSignedUrlByPath = {};
   bool _loading = true;
   String? _error;
   bool _submitting = false;
@@ -76,7 +77,15 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
   Future<void> _loadAnswers(String questionId) async {
     try {
       final list = await _dailyRepo.listAnswers(questionId);
-      if (mounted) setState(() => _answers[questionId] = list);
+      final paths = list.map((a) => a.imagePath).whereType<String>().where((p) => p.isNotEmpty);
+      final signed = await _dailyRepo.signedAnswerImageUrls(paths);
+      if (!mounted) return;
+      setState(() {
+        _answers[questionId] = list;
+        for (final e in signed.entries) {
+          _answerImageSignedUrlByPath[e.key] = e.value;
+        }
+      });
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -346,14 +355,15 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
   }
 
   Widget _buildAnswerTile(CloudDailyAnswer a) {
-    final url = _dailyRepo.answerImagePublicUrl(a.imagePath);
+    final path = a.imagePath;
+    final url = path != null && path.isNotEmpty ? _answerImageSignedUrlByPath[path] : null;
     final body = a.answerText.trim();
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (url != null)
+          if (path != null && path.isNotEmpty && url != null)
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: Image.network(
@@ -366,6 +376,11 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
                   child: Text(_t('answer_image_failed'), style: Theme.of(context).textTheme.bodySmall),
                 ),
               ),
+            )
+          else if (path != null && path.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(_t('answer_image_failed'), style: Theme.of(context).textTheme.bodySmall),
             ),
           if (body.isNotEmpty) Text(body, style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 4),
