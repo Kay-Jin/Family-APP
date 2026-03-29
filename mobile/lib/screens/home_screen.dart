@@ -1,9 +1,20 @@
+import 'dart:async';
+
+import 'package:family_mobile/models/activity_item.dart';
+import 'package:family_mobile/models/family.dart';
+import 'package:family_mobile/models/family_brief.dart';
+import 'package:family_mobile/push/family_brief_local_notifications.dart';
+import 'package:family_mobile/screens/family_brief_compose_screen.dart';
 import 'package:family_mobile/screens/supabase_family_screen.dart';
 import 'package:family_mobile/state/app_state.dart';
+import 'package:family_mobile/widgets/family_brief_detail_sheet.dart';
+import 'package:family_mobile/widgets/family_brief_reply_sheet.dart';
+import 'package:family_mobile/theme/family_theme.dart';
 import 'package:family_mobile/l10n/app_strings.dart';
 import 'package:family_mobile/util/api_error_message.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
@@ -47,6 +58,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   final _hospitalsController = TextEditingController();
   final _medicalOtherController = TextEditingController();
   final _accompanimentNoteController = TextEditingController();
+  final _taskTitleController = TextEditingController();
+  final _taskAssigneeController = TextEditingController();
+  final _taskDueController = TextEditingController();
   bool _contactPrimary = true;
   bool _accompanimentRequested = false;
   bool _medicalPrefilled = false;
@@ -65,14 +79,21 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Duration _voiceDuration = Duration.zero;
   bool _questionNewestFirst = true;
   bool _photoNewestFirst = true;
-  late final TabController _tabController;
+  late final TabController _memoriesTabController;
+  int _shellIndex = 0;
+  int _taskFilterIndex = 0;
   int? _highlightQuestionId;
   int? _highlightPhotoId;
+  bool _briefRmEnabled = false;
+  TimeOfDay _briefRmTime = const TimeOfDay(hour: 10, minute: 0);
+  int _briefRmWeekday = DateTime.sunday;
+  bool _briefRmLoaded = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    unawaited(_loadBriefReminderUi());
+    _memoriesTabController = TabController(length: 2, vsync: this);
     _audioPlayer.playerStateStream.listen((state) {
       if (!mounted) return;
       if (state.processingState == ProcessingState.completed || !state.playing) {
@@ -93,7 +114,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   void dispose() {
     _audioRecorder.dispose();
     _audioPlayer.dispose();
-    _tabController.dispose();
+    _memoriesTabController.dispose();
     _familyNameController.dispose();
     _inviteCodeController.dispose();
     _questionDateController.dispose();
@@ -123,6 +144,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _hospitalsController.dispose();
     _medicalOtherController.dispose();
     _accompanimentNoteController.dispose();
+    _taskTitleController.dispose();
+    _taskAssigneeController.dispose();
+    _taskDueController.dispose();
     super.dispose();
   }
 
@@ -205,39 +229,195 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     return _formatSeconds(total);
   }
 
-  void _focusActivity(String type, int activityId) {
-    if (type == 'daily_question') {
-      _tabController.animateTo(1);
-      setState(() => _highlightQuestionId = activityId);
+  Future<void> _loadBriefReminderUi() async {
+    final en = await FamilyBriefLocalNotifications.isEnabled();
+    final t = await FamilyBriefLocalNotifications.getReminderTime();
+    final w = await FamilyBriefLocalNotifications.getWeekday();
+    if (!mounted) return;
+    setState(() {
+      _briefRmEnabled = en;
+      _briefRmTime = t;
+      _briefRmWeekday = w;
+      _briefRmLoaded = true;
+    });
+  }
+
+  DateTime _mondayOfLocalDate(DateTime d) {
+    final day = DateTime(d.year, d.month, d.day);
+    return day.subtract(Duration(days: day.weekday - DateTime.monday));
+  }
+
+  bool _sentBriefThisCalendarWeek(AppState app) {
+    final uid = app.userId;
+    if (uid == null) return true;
+    final now = DateTime.now();
+    final mNow = _mondayOfLocalDate(now);
+    for (final b in app.familyBriefs) {
+      if (b.authorUserId != uid) continue;
+      final t = DateTime.tryParse(b.createdAt);
+      if (t == null) continue;
+      if (_mondayOfLocalDate(t.toLocal()) == mNow) return true;
+    }
+    return false;
+  }
+
+  void _openComposeBrief() {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => const FamilyBriefComposeScreen()),
+    );
+  }
+
+  void _showBriefReply(FamilyBrief brief) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => FamilyBriefReplySheet(brief: brief),
+    );
+  }
+
+  Future<void> _openFamilyBriefDetail(AppState appState, int briefId) async {
+    final fresh = await appState.fetchFamilyBrief(briefId);
+    if (!mounted) return;
+    FamilyBrief? b = fresh;
+    if (b == null) {
+      for (final x in appState.familyBriefs) {
+        if (x.id == briefId) {
+          b = x;
+          break;
+        }
+      }
+    }
+    if (b == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_t('brief_load_failed'))),
+      );
+      return;
+    }
+    final briefForSheet = b;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => FamilyBriefDetailSheet(brief: briefForSheet),
+    );
+  }
+
+  void _focusActivity(AppState appState, ActivityItem a) {
+    if (a.activityType == 'daily_question') {
+      setState(() => _shellIndex = 4);
+      setState(() => _highlightQuestionId = a.activityId);
       Future.delayed(const Duration(seconds: 2), () {
         if (!mounted) return;
         setState(() => _highlightQuestionId = null);
       });
       return;
     }
-    if (type == 'photo') {
-      _tabController.animateTo(2);
-      setState(() => _highlightPhotoId = activityId);
+    if (a.activityType == 'photo') {
+      setState(() => _shellIndex = 1);
+      _memoriesTabController.animateTo(1);
+      setState(() => _highlightPhotoId = a.activityId);
       Future.delayed(const Duration(seconds: 2), () {
         if (!mounted) return;
         setState(() => _highlightPhotoId = null);
       });
       return;
     }
-    if (type == 'daily_answer') {
-      _tabController.animateTo(1);
+    if (a.activityType == 'daily_answer') {
+      setState(() => _shellIndex = 4);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_t('activity_switched_questions'))),
+        SnackBar(content: Text(_t('activity_switched_play'))),
       );
       return;
     }
-    if (type == 'photo_comment') {
-      _tabController.animateTo(2);
+    if (a.activityType == 'photo_comment') {
+      setState(() => _shellIndex = 1);
+      _memoriesTabController.animateTo(1);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_t('activity_switched_photos'))),
+        SnackBar(content: Text(_t('activity_switched_memories'))),
       );
       return;
     }
+    if (a.activityType == 'family_task') {
+      setState(() => _shellIndex = 3);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_t('activity_switched_tasks'))),
+      );
+      return;
+    }
+    if (a.activityType == 'family_brief') {
+      unawaited(_openFamilyBriefDetail(appState, a.activityId));
+      return;
+    }
+    if (a.activityType == 'family_brief_reply') {
+      final bid = a.briefId ?? a.activityId;
+      unawaited(_openFamilyBriefDetail(appState, bid));
+      return;
+    }
+  }
+
+  void _openCareHub(AppState appState) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.88,
+          minChildSize: 0.45,
+          maxChildSize: 0.95,
+          builder: (_, scrollController) {
+            return Column(
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.black26,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 8),
+                      Text(
+                        _t('care_open_sheet'),
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: _buildCareTab(appState, scrollController),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   bool _isValidDate(String text) {
@@ -280,6 +460,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   String _t(String key) => AppStrings.of(context).text(key);
+
+  String _weekdayLabel(int weekday) {
+    final base = DateTime(2026, 1, 5);
+    final d = base.add(Duration(days: weekday - DateTime.monday));
+    return DateFormat.E(Localizations.localeOf(context).toString()).format(d);
+  }
 
   Widget _buildFamilySetup(AppState appState) {
     return ListView(
@@ -1076,65 +1262,310 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildOverviewTab(AppState appState) {
+  Widget _buildShortcutStrip(AppState appState) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _t('shortcuts_title'),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ActionChip(
+              avatar: const Icon(Icons.photo_library_outlined, size: 18),
+              label: Text(_t('memories_album')),
+              onPressed: () => setState(() {
+                _shellIndex = 1;
+                _memoriesTabController.animateTo(1);
+              }),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.calendar_month_outlined, size: 18),
+              label: Text(_t('nav_calendar')),
+              onPressed: () => setState(() => _shellIndex = 2),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.quiz_outlined, size: 18),
+              label: Text(_t('questions')),
+              onPressed: () => setState(() => _shellIndex = 4),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.volunteer_activism_outlined, size: 18),
+              label: Text(_t('care_open_sheet')),
+              onPressed: () => _openCareHub(appState),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.task_alt_outlined, size: 18),
+              label: Text(_t('nav_tasks')),
+              onPressed: () => setState(() => _shellIndex = 3),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.mail_outline, size: 18),
+              label: Text(_t('brief_shortcut_chip')),
+              onPressed: _openComposeBrief,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _pendingBriefSectionWidgets(AppState appState) {
+    final uid = appState.userId;
+    if (uid == null || appState.pendingFamilyBriefs.isEmpty) return [];
+    return appState.pendingFamilyBriefs.map((p) {
+      if (p.authorUserId == uid) {
+        return Padding(
+          key: ValueKey<int>(p.id + 100000),
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Card(
+            child: ListTile(
+              leading: const Icon(Icons.hourglass_bottom_outlined),
+              title: Text(_t('brief_waiting_family')),
+              subtitle: p.parentsOnly ? Text(_t('brief_parents_only_badge')) : null,
+            ),
+          ),
+        );
+      }
+      if (!appState.mayReplyToFamilyBriefs) {
+        return Padding(
+          key: ValueKey<int>(p.id + 200000),
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Card(
+            child: ListTile(
+              leading: const Icon(Icons.lock_outline),
+              title: Text(_t('brief_pending_card_title')),
+              subtitle: Text(
+                '${_t('brief_pending_card_subtitle').replaceAll('{name}', p.authorDisplayName)}\n${_t('brief_cannot_reply_non_parent')}',
+              ),
+              isThreeLine: true,
+            ),
+          ),
+        );
+      }
+      return Padding(
+        key: ValueKey<int>(p.id + 300000),
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Card(
+          color: const Color(0xFFE8F5E9),
+          child: ListTile(
+            leading: const Icon(Icons.reply_rounded),
+            title: Text(_t('brief_pending_card_title')),
+            subtitle: Text(
+              _t('brief_pending_card_subtitle').replaceAll('{name}', p.authorDisplayName),
+            ),
+            isThreeLine: true,
+            trailing: FilledButton(
+              onPressed: () => _showBriefReply(p),
+              child: Text(_t('brief_reply_open')),
+            ),
+          ),
+        ),
+      );
+    }).toList();
+  }
+
+  List<Widget> _overviewContentWidgets(AppState appState) {
     final latestQuestions = [...appState.dailyQuestions]..sort((a, b) => b.id.compareTo(a.id));
     final latestPhotos = [...appState.photos]..sort((a, b) => b.id.compareTo(a.id));
     final latestReminders = [...appState.birthdayReminders]..sort((a, b) => b.id.compareTo(a.id));
 
-    return ListView(
-      key: const PageStorageKey<String>('overview_tab'),
-      padding: const EdgeInsets.all(16),
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            gradient: const LinearGradient(
-              colors: [Color(0xFFFFEADB), Color(0xFFFFF4EC)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+    return [
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFFEADB), Color(0xFFFFF4EC)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: Color(0xFFFFD9C7),
-                child: Icon(Icons.favorite_rounded, color: Color(0xFFB45E48)),
+        ),
+        child: Row(
+          children: [
+            const CircleAvatar(
+              radius: 22,
+              backgroundColor: Color(0xFFFFD9C7),
+              child: Icon(Icons.favorite_rounded, color: Color(0xFFB45E48)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _t('family_overview_quote'),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF6E4D42),
+                ),
               ),
-              SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  _t('family_overview_quote'),
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF6E4D42),
-                  ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 12),
+      if (_briefRmLoaded && _briefRmEnabled && !_sentBriefThisCalendarWeek(appState)) ...[
+        Card(
+          color: const Color(0xFFFFF8E6),
+          child: ListTile(
+            leading: const Icon(Icons.edit_note_outlined),
+            title: Text(_t('brief_nudge_banner')),
+            trailing: TextButton(onPressed: _openComposeBrief, child: Text(_t('brief_nudge_cta'))),
+          ),
+        ),
+        const SizedBox(height: 10),
+      ],
+      Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                title: Text(_t('family_role_section_title')),
+                subtitle: Text(_t('family_role_picker_hint')),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final opt in const ['parent', 'member', 'child'])
+                      FilterChip(
+                        label: Text(_t('family_role_$opt')),
+                        selected: (appState.family?.myRole ?? '') == opt,
+                        onSelected: appState.isBusy
+                            ? null
+                            : (_) async {
+                                await appState.patchMyFamilyMemberRole(opt);
+                                if (!context.mounted) return;
+                                final err = appState.error;
+                                if (err != null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(apiErrorMessage(err, _t))),
+                                  );
+                                }
+                              },
+                      ),
+                  ],
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            _buildStatCard(_t('questions'), appState.dailyQuestions.length.toString(), Icons.quiz_outlined),
-            _buildStatCard(_t('photos'), appState.photos.length.toString(), Icons.photo_library_outlined),
-            _buildStatCard(_t('birthdays'), appState.birthdayReminders.length.toString(), Icons.cake_outlined),
-          ],
-        ),
-        const SizedBox(height: 20),
+      ),
+      const SizedBox(height: 10),
+      ..._pendingBriefSectionWidgets(appState),
+      Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: [
+          _buildStatCard(_t('questions'), appState.dailyQuestions.length.toString(), Icons.quiz_outlined),
+          _buildStatCard(_t('photos'), appState.photos.length.toString(), Icons.photo_library_outlined),
+          _buildStatCard(_t('birthdays'), appState.birthdayReminders.length.toString(), Icons.cake_outlined),
+          _buildStatCard(_t('nav_tasks'), appState.familyTasks.length.toString(), Icons.task_alt_outlined),
+        ],
+      ),
+      const SizedBox(height: 20),
+      _sectionTitle(_t('recent_activity'), Icons.timeline),
+      const SizedBox(height: 8),
+      if (appState.activities.isEmpty)
+        _warmEmptyCard(_t('no_activity'), Icons.timelapse_outlined)
+      else
+        ...appState.activities.take(8).map(
+              (a) => ListTile(
+                onTap: () => _focusActivity(appState, a),
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  backgroundColor: const Color(0xFFFFEBDD),
+                  child: Text(
+                    _initialOf(a.actorName),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF8E4B36),
+                    ),
+                  ),
+                ),
+                title: Text('${a.actorName} · ${_activityTypeLabel(a.activityType)}'),
+                subtitle: Text(
+                  '${a.content}${a.activityType == 'family_brief_reply' && a.briefId != null ? '\n${_t('activity_thread_brief_reply').replaceAll('{id}', '${a.briefId}')}' : ''}\n${_formatRelativeTime(a.createdAt)}',
+                ),
+                trailing: Icon(_activityIcon(a.activityType), size: 18),
+                isThreeLine: true,
+              ),
+            ),
+      const SizedBox(height: 20),
+      _sectionTitle(_t('latest_questions'), Icons.quiz_outlined),
+      const SizedBox(height: 8),
+      if (latestQuestions.isEmpty)
+        _warmEmptyCard(_t('no_questions'), Icons.help_outline)
+      else
+        ...latestQuestions.take(3).map(
+              (q) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.quiz_outlined),
+                title: Text(q.questionText),
+                subtitle: Text(q.questionDate),
+              ),
+            ),
+      const SizedBox(height: 16),
+      _sectionTitle(_t('latest_photos'), Icons.photo_outlined),
+      const SizedBox(height: 8),
+      if (latestPhotos.isEmpty)
+        _warmEmptyCard(_t('no_photos'), Icons.photo_size_select_actual_outlined)
+      else
+        ...latestPhotos.take(3).map(
+              (p) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.photo_outlined),
+                title: Text(p.caption.isEmpty ? '${_t('photos')} #${p.id}' : p.caption),
+                subtitle: Text('${_t('likes_count')} ${p.likeCount} · ${_t('comments_count')} ${p.commentCount}'),
+              ),
+            ),
+      const SizedBox(height: 16),
+      _sectionTitle(_t('latest_reminders'), Icons.cake_outlined),
+      const SizedBox(height: 8),
+      if (latestReminders.isEmpty)
+        _warmEmptyCard(_t('no_reminders'), Icons.event_busy_outlined)
+      else
+        ...latestReminders.take(3).map(
+              (r) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.cake_outlined),
+                title: Text(r.birthday),
+                subtitle: Text(
+                  '${_t('notify_days_before')}: ${r.notifyDaysBefore} · ${r.enabled ? _t('enabled') : _t('disabled')}',
+                ),
+              ),
+            ),
+    ];
+  }
+
+  Widget _buildTimelineTab(AppState appState) {
+    final latestQuestions = [...appState.dailyQuestions]..sort((a, b) => b.id.compareTo(a.id));
+    final latestPhotos = [...appState.photos]..sort((a, b) => b.id.compareTo(a.id));
+    final latestReminders = [...appState.birthdayReminders]..sort((a, b) => b.id.compareTo(a.id));
+
+    return ListView(
+      key: const PageStorageKey<String>('timeline_tab'),
+      padding: const EdgeInsets.all(16),
+      children: [
         _sectionTitle(_t('recent_activity'), Icons.timeline),
         const SizedBox(height: 8),
         if (appState.activities.isEmpty)
           _warmEmptyCard(_t('no_activity'), Icons.timelapse_outlined)
         else
-          ...appState.activities.take(8).map(
+          ...appState.activities.map(
             (a) => ListTile(
-              onTap: () => _focusActivity(a.activityType, a.activityId),
+              onTap: () => _focusActivity(appState, a),
               contentPadding: EdgeInsets.zero,
               leading: CircleAvatar(
                 backgroundColor: const Color(0xFFFFEBDD),
@@ -1147,7 +1578,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
               ),
               title: Text('${a.actorName} · ${_activityTypeLabel(a.activityType)}'),
-              subtitle: Text('${a.content}\n${_formatRelativeTime(a.createdAt)}'),
+              subtitle: Text(
+                '${a.content}${a.activityType == 'family_brief_reply' && a.briefId != null ? '\n${_t('activity_thread_brief_reply').replaceAll('{id}', '${a.briefId}')}' : ''}\n${_formatRelativeTime(a.createdAt)}',
+              ),
               trailing: Icon(_activityIcon(a.activityType), size: 18),
               isThreeLine: true,
             ),
@@ -1158,46 +1591,431 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         if (latestQuestions.isEmpty)
           _warmEmptyCard(_t('no_questions'), Icons.help_outline)
         else
-          ...latestQuestions.take(3).map(
-            (q) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.quiz_outlined),
-              title: Text(q.questionText),
-              subtitle: Text(q.questionDate),
-            ),
-          ),
+          ...latestQuestions.take(5).map(
+                (q) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.quiz_outlined),
+                  title: Text(q.questionText),
+                  subtitle: Text(q.questionDate),
+                ),
+              ),
         const SizedBox(height: 16),
         _sectionTitle(_t('latest_photos'), Icons.photo_outlined),
         const SizedBox(height: 8),
         if (latestPhotos.isEmpty)
           _warmEmptyCard(_t('no_photos'), Icons.photo_size_select_actual_outlined)
         else
-          ...latestPhotos.take(3).map(
-            (p) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.photo_outlined),
-              title: Text(p.caption.isEmpty ? '${_t('photos')} #${p.id}' : p.caption),
-              subtitle: Text('${_t('likes_count')} ${p.likeCount} · ${_t('comments_count')} ${p.commentCount}'),
-            ),
-          ),
+          ...latestPhotos.take(5).map(
+                (p) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.photo_outlined),
+                  title: Text(p.caption.isEmpty ? '${_t('photos')} #${p.id}' : p.caption),
+                  subtitle: Text('${_t('likes_count')} ${p.likeCount} · ${_t('comments_count')} ${p.commentCount}'),
+                ),
+              ),
         const SizedBox(height: 16),
         _sectionTitle(_t('latest_reminders'), Icons.cake_outlined),
         const SizedBox(height: 8),
         if (latestReminders.isEmpty)
           _warmEmptyCard(_t('no_reminders'), Icons.event_busy_outlined)
         else
-          ...latestReminders.take(3).map(
-            (r) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.cake_outlined),
-              title: Text(r.birthday),
-              subtitle: Text(
-                '${_t('notify_days_before')}: ${r.notifyDaysBefore} · ${r.enabled ? _t('enabled') : _t('disabled')}',
+          ...latestReminders.take(5).map(
+                (r) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.cake_outlined),
+                  title: Text(r.birthday),
+                  subtitle: Text(
+                    '${_t('notify_days_before')}: ${r.notifyDaysBefore} · ${r.enabled ? _t('enabled') : _t('disabled')}',
+                  ),
+                ),
+              ),
+      ],
+    );
+  }
+
+  Widget _buildShellHome(AppState appState, Family family) {
+    return Column(
+      children: [
+        Card(
+          margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: ListTile(
+            leading: const CircleAvatar(
+              backgroundColor: Color(0xFFFFE4D8),
+              child: Icon(Icons.groups_2_outlined, color: Color(0xFF9A4F36)),
+            ),
+            title: Text(
+              family.name,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            subtitle: Text('${_t('invite_code')}: ${family.inviteCode}'),
+            trailing: IconButton(
+              onPressed: appState.isBusy ? null : appState.refreshHomeData,
+              icon: const Icon(Icons.refresh),
+            ),
+          ),
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: appState.refreshHomeData,
+            child: ListView(
+              key: const PageStorageKey<String>('shell_home_scroll'),
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+              children: [
+                _buildShortcutStrip(appState),
+                const SizedBox(height: 16),
+                ..._overviewContentWidgets(appState),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildShellMemories(AppState appState) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Material(
+            color: const Color(0xFFFFEEE3),
+            borderRadius: BorderRadius.circular(14),
+            child: TabBar(
+              controller: _memoriesTabController,
+              indicator: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              labelColor: const Color(0xFF8E4B36),
+              unselectedLabelColor: const Color(0xFF8E6C5F),
+              dividerColor: Colors.transparent,
+              tabs: [
+                Tab(text: _t('memories_timeline')),
+                Tab(text: _t('memories_album')),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: TabBarView(
+            controller: _memoriesTabController,
+            children: [
+              _buildTimelineTab(appState),
+              _buildPhotosTab(appState),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildShellCalendar(AppState appState) {
+    final monthLabel = MaterialLocalizations.of(context).formatMonthYear(DateTime.now());
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_month_rounded, color: Color(0xFFB45E48)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _t('calendar_month_hint'),
+                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                        ),
+                        Text(
+                          monthLabel,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
+        ),
+        Expanded(child: _buildBirthdayTab(appState)),
       ],
     );
+  }
+
+  Widget _buildShellTasks(AppState appState) {
+    final tasks = appState.familyTasks;
+    final filtered = switch (_taskFilterIndex) {
+      1 => tasks.where((t) => !t.done).toList(),
+      2 => tasks.where((t) => t.done).toList(),
+      _ => tasks,
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Card(
+            color: const Color(0xFFFFF4EC),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Text(
+                _t('tasks_intro_short'),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF6D5A51),
+                      height: 1.35,
+                    ),
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ChoiceChip(
+                label: Text(_t('tasks_filter_all')),
+                selected: _taskFilterIndex == 0,
+                onSelected: (_) => setState(() => _taskFilterIndex = 0),
+              ),
+              ChoiceChip(
+                label: Text(_t('tasks_filter_open')),
+                selected: _taskFilterIndex == 1,
+                onSelected: (_) => setState(() => _taskFilterIndex = 1),
+              ),
+              ChoiceChip(
+                label: Text(_t('tasks_filter_done')),
+                selected: _taskFilterIndex == 2,
+                onSelected: (_) => setState(() => _taskFilterIndex = 2),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: TextField(
+            controller: _taskTitleController,
+            decoration: InputDecoration(labelText: _t('task_title_label')),
+            textInputAction: TextInputAction.next,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: TextField(
+            controller: _taskAssigneeController,
+            decoration: InputDecoration(labelText: _t('task_assignee_hint')),
+            textInputAction: TextInputAction.next,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: TextField(
+            controller: _taskDueController,
+            decoration: InputDecoration(labelText: _t('task_due_hint')),
+            onSubmitted: (_) => _submitFamilyTask(appState),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: FilledButton.icon(
+            onPressed: appState.isBusy ? null : () => _submitFamilyTask(appState),
+            icon: const Icon(Icons.add_task_rounded),
+            label: Text(_t('add_family_task')),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: filtered.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      _t('tasks_empty'),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: const Color(0xFF666666),
+                          ),
+                    ),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, index) {
+                    final t = filtered[index];
+                    final subtitleParts = <String>[];
+                    if (t.assigneeLabel != null && t.assigneeLabel!.isNotEmpty) {
+                      subtitleParts.add(t.assigneeLabel!);
+                    }
+                    if (t.dueDate != null && t.dueDate!.isNotEmpty) {
+                      subtitleParts.add('${_t('task_due_label')}: ${t.dueDate}');
+                    }
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: Checkbox(
+                          value: t.done,
+                          onChanged: appState.isBusy
+                              ? null
+                              : (v) {
+                                  appState.setFamilyTaskDone(
+                                    taskId: t.id,
+                                    done: v ?? false,
+                                  );
+                                },
+                        ),
+                        title: Text(
+                          t.title,
+                          style: TextStyle(
+                            decoration: t.done ? TextDecoration.lineThrough : null,
+                            color: t.done ? const Color(0xFF888888) : null,
+                          ),
+                        ),
+                        subtitle: subtitleParts.isEmpty
+                            ? null
+                            : Text(subtitleParts.join(' · ')),
+                        trailing: IconButton(
+                          tooltip: _t('delete_task'),
+                          onPressed: appState.isBusy
+                              ? null
+                              : () async {
+                                  final ok = await showDialog<bool>(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      title: Text(_t('delete_task')),
+                                      content: Text(_t('delete_task_confirm')),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(ctx, false),
+                                          child: Text(_t('cancel')),
+                                        ),
+                                        FilledButton(
+                                          onPressed: () => Navigator.pop(ctx, true),
+                                          child: Text(_t('delete_confirm')),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (ok == true && context.mounted) {
+                                    await appState.removeFamilyTask(t.id);
+                                  }
+                                },
+                          icon: const Icon(Icons.delete_outline),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _submitFamilyTask(AppState appState) async {
+    final title = _taskTitleController.text.trim();
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_t('task_title_required'))),
+      );
+      return;
+    }
+    final due = _taskDueController.text.trim();
+    if (due.isNotEmpty && !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(due)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_t('question_date_invalid'))),
+      );
+      return;
+    }
+    await appState.addFamilyTask(
+      title: title,
+      assigneeLabel: _taskAssigneeController.text.trim().isEmpty ? null : _taskAssigneeController.text,
+      dueDate: due.isEmpty ? null : due,
+    );
+    if (!mounted) return;
+    if (appState.error == null) {
+      _taskTitleController.clear();
+      _taskAssigneeController.clear();
+      _taskDueController.clear();
+    }
+  }
+
+  Widget _buildShellPlay(AppState appState) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Card(
+            color: const Color(0xFFFFF4EC),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.celebration_outlined, color: Color(0xFFB45E48)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _t('play_games_soon_title'),
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _t('play_games_soon_body'),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: const Color(0xFF666666),
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Expanded(child: _buildQuestionsTab(appState)),
+      ],
+    );
+  }
+
+  String _shellTitle() {
+    switch (_shellIndex) {
+      case 0:
+        return _t('nav_home');
+      case 1:
+        return _t('nav_memories');
+      case 2:
+        return _t('nav_calendar');
+      case 3:
+        return _t('nav_tasks');
+      case 4:
+        return _t('nav_play');
+      default:
+        return _t('family_home');
+    }
   }
 
   Widget _sectionTitle(String text, IconData icon) {
@@ -1238,7 +2056,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     return t.substring(0, 1).toUpperCase();
   }
 
-  Widget _buildCareTab(AppState appState) {
+  Widget _buildCareTab(AppState appState, [ScrollController? scrollController]) {
     final statusOptions = const [
       ('home_safe', '已到家'),
       ('on_the_way', '在路上'),
@@ -1247,6 +2065,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     ];
     return ListView(
       key: const PageStorageKey<String>('care_tab'),
+      controller: scrollController,
       padding: const EdgeInsets.all(16),
       children: [
         Text(_t('family_status_card'), style: Theme.of(context).textTheme.titleMedium),
@@ -1302,6 +2121,80 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               subtitle: Text('${s.note}\n${_formatRelativeTime(s.createdAt)}'),
               isThreeLine: true,
             )),
+        const Divider(height: 28),
+        Text(_t('brief_weekly_reminder_title'), style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 6),
+        Text(
+          _t('brief_weekly_reminder_subtitle'),
+          style: const TextStyle(color: Colors.black54, height: 1.35),
+        ),
+        const SizedBox(height: 8),
+        if (!_briefRmLoaded)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: LinearProgressIndicator(),
+          )
+        else ...[
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(_t('brief_weekly_reminder_enabled')),
+            value: _briefRmEnabled,
+            onChanged: (v) async {
+              await FamilyBriefLocalNotifications.setEnabled(
+                enabled: v,
+                title: _t('brief_weekly_notif_title'),
+                body: _t('brief_weekly_notif_body'),
+              );
+              if (mounted) setState(() => _briefRmEnabled = v);
+            },
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(_t('brief_weekly_pick_time')),
+            subtitle: Text(_briefRmTime.format(context)),
+            trailing: const Icon(Icons.schedule),
+            onTap: () async {
+              final picked = await showTimePicker(context: context, initialTime: _briefRmTime);
+              if (picked == null || !mounted) return;
+              await FamilyBriefLocalNotifications.setSchedule(
+                weekday: _briefRmWeekday,
+                hour: picked.hour,
+                minute: picked.minute,
+              );
+              setState(() => _briefRmTime = picked);
+            },
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(_t('brief_weekly_pick_weekday')),
+            subtitle: Text(_weekdayLabel(_briefRmWeekday)),
+            trailing: const Icon(Icons.calendar_view_week_outlined),
+            onTap: () async {
+              final w = await showModalBottomSheet<int>(
+                context: context,
+                builder: (ctx) => SafeArea(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final wd in List.generate(7, (i) => DateTime.monday + i))
+                        ListTile(
+                          title: Text(_weekdayLabel(wd)),
+                          onTap: () => Navigator.pop(ctx, wd),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+              if (w == null || !mounted) return;
+              await FamilyBriefLocalNotifications.setSchedule(
+                weekday: w,
+                hour: _briefRmTime.hour,
+                minute: _briefRmTime.minute,
+              );
+              setState(() => _briefRmWeekday = w);
+            },
+          ),
+        ],
         const Divider(height: 28),
         Text(_t('voice_mailbox'), style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
@@ -1775,6 +2668,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         return Icons.photo_outlined;
       case 'photo_comment':
         return Icons.comment_outlined;
+      case 'family_task':
+        return Icons.task_alt_outlined;
+      case 'family_brief':
+        return Icons.mail_outline;
+      case 'family_brief_reply':
+        return Icons.reply_rounded;
       default:
         return Icons.bolt_outlined;
     }
@@ -1783,13 +2682,19 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   String _activityTypeLabel(String type) {
     switch (type) {
       case 'daily_question':
-        return 'posted a question';
+        return _t('activity_type_daily_question');
       case 'daily_answer':
-        return 'answered';
+        return _t('activity_type_daily_answer');
       case 'photo':
-        return 'uploaded a photo';
+        return _t('activity_type_photo');
       case 'photo_comment':
-        return 'commented';
+        return _t('activity_type_photo_comment');
+      case 'family_task':
+        return _t('activity_type_family_task');
+      case 'family_brief':
+        return _t('activity_type_family_brief');
+      case 'family_brief_reply':
+        return _t('activity_type_family_brief_reply');
       default:
         return type;
     }
@@ -1804,62 +2709,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     if (family == null) {
       body = _buildFamilySetup(appState);
     } else {
-      body = Column(
+      body = IndexedStack(
+        index: _shellIndex,
         children: [
-          Card(
-            margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFFFFE4D8),
-                child: Icon(Icons.groups_2_outlined, color: Color(0xFF9A4F36)),
-              ),
-              title: Text(
-                family.name,
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-              subtitle: Text('${_t('invite_code')}: ${family.inviteCode}'),
-              trailing: IconButton(
-                onPressed: appState.isBusy ? null : appState.refreshHomeData,
-                icon: const Icon(Icons.refresh),
-              ),
-            ),
-          ),
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFEEE3),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              indicator: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              labelColor: const Color(0xFF8E4B36),
-              unselectedLabelColor: const Color(0xFF8E6C5F),
-              dividerColor: Colors.transparent,
-              tabs: [
-                Tab(text: _t('overview')),
-                Tab(text: _t('questions')),
-                Tab(text: _t('photos')),
-                Tab(text: _t('birthdays')),
-                Tab(text: _t('care')),
-              ],
-            ),
-          ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildOverviewTab(appState),
-                _buildQuestionsTab(appState),
-                _buildPhotosTab(appState),
-                _buildBirthdayTab(appState),
-                _buildCareTab(appState),
-              ],
-            ),
-          ),
+          _buildShellHome(appState, family),
+          _buildShellMemories(appState),
+          _buildShellCalendar(appState),
+          _buildShellTasks(appState),
+          _buildShellPlay(appState),
         ],
       );
     }
@@ -1868,12 +2725,23 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       appBar: AppBar(
         title: Row(
           children: [
-            Icon(Icons.favorite_rounded, size: 20, color: Color(0xFFCC6B5A)),
-            SizedBox(width: 8),
-            Text(_t('family_home')),
+            const Icon(Icons.favorite_rounded, size: 20, color: Color(0xFFCC6B5A)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                family == null ? _t('family_home') : _shellTitle(),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         actions: [
+          if (family != null)
+            IconButton(
+              tooltip: _t('care_open_sheet'),
+              onPressed: () => _openCareHub(appState),
+              icon: const Icon(Icons.volunteer_activism_outlined),
+            ),
           PopupMenuButton<String?>(
             tooltip: _t('language'),
             icon: const Icon(Icons.language),
@@ -1913,14 +2781,41 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
         ],
       ),
+      bottomNavigationBar: family == null
+          ? null
+          : NavigationBar(
+              selectedIndex: _shellIndex,
+              onDestinationSelected: (i) => setState(() => _shellIndex = i),
+              destinations: [
+                NavigationDestination(
+                  icon: const Icon(Icons.home_outlined),
+                  selectedIcon: const Icon(Icons.home_rounded),
+                  label: _t('nav_home'),
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.auto_stories_outlined),
+                  selectedIcon: const Icon(Icons.auto_stories_rounded),
+                  label: _t('nav_memories'),
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.calendar_month_outlined),
+                  selectedIcon: const Icon(Icons.calendar_month_rounded),
+                  label: _t('nav_calendar'),
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.task_alt_outlined),
+                  selectedIcon: const Icon(Icons.task_alt_rounded),
+                  label: _t('nav_tasks'),
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.celebration_outlined),
+                  selectedIcon: const Icon(Icons.celebration_rounded),
+                  label: _t('nav_play'),
+                ),
+              ],
+            ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFFFFAF7), Color(0xFFFFF3EC)],
-          ),
-        ),
+        decoration: FamilyAppDecor.scaffoldGradient,
         child: Column(
           children: [
             if (appState.error != null)
@@ -1934,10 +2829,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
               ),
             Expanded(
-              child: RefreshIndicator(
-                onRefresh: appState.refreshHomeData,
-                child: body,
-              ),
+              child: family == null
+                  ? RefreshIndicator(
+                      onRefresh: appState.refreshHomeData,
+                      child: body,
+                    )
+                  : body,
             ),
           ],
         ),

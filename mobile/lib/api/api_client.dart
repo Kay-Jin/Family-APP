@@ -11,6 +11,8 @@ import 'package:family_mobile/models/status_update.dart';
 import 'package:family_mobile/models/voice_message.dart';
 import 'package:family_mobile/models/emergency_contact.dart';
 import 'package:family_mobile/models/care_reminder.dart';
+import 'package:family_mobile/models/family_task.dart';
+import 'package:family_mobile/models/family_brief.dart';
 import 'package:family_mobile/models/medical_card.dart';
 import 'package:http/http.dart' as http;
 
@@ -98,6 +100,20 @@ class ApiClient {
     final response = await http.get(uri, headers: _authHeaders(token));
     _ensureSuccess(response);
     return Family.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<void> patchMyFamilyMemberRole({
+    required String token,
+    required int familyId,
+    required String role,
+  }) async {
+    final uri = Uri.parse('$baseUrl/families/$familyId/members/me');
+    final response = await http.patch(
+      uri,
+      headers: _authHeaders(token),
+      body: jsonEncode({'role': role}),
+    );
+    _ensureSuccess(response);
   }
 
   Future<void> createDailyQuestion({
@@ -474,6 +490,67 @@ class ApiClient {
     return data.map((e) => DailyQuestion.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  Future<List<FamilyTask>> getFamilyTasks({
+    required String token,
+    required int familyId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/families/$familyId/family-tasks');
+    final response = await http.get(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+    final data = jsonDecode(response.body) as List<dynamic>;
+    return data.map((e) => FamilyTask.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+  }
+
+  Future<FamilyTask> createFamilyTask({
+    required String token,
+    required int familyId,
+    required String title,
+    String? assigneeLabel,
+    String? dueDate,
+  }) async {
+    final uri = Uri.parse('$baseUrl/family-tasks');
+    final body = <String, dynamic>{
+      'family_id': familyId,
+      'title': title,
+      if (assigneeLabel != null && assigneeLabel.isNotEmpty) 'assignee_label': assigneeLabel,
+      if (dueDate != null && dueDate.isNotEmpty) 'due_date': dueDate,
+    };
+    final response = await http.post(
+      uri,
+      headers: _authHeaders(token),
+      body: jsonEncode(body),
+    );
+    _ensureSuccess(response);
+    return FamilyTask.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<FamilyTask> updateFamilyTask({
+    required String token,
+    required int taskId,
+    required Map<String, dynamic> fields,
+  }) async {
+    if (fields.isEmpty) {
+      throw Exception('no_task_update_fields');
+    }
+    final uri = Uri.parse('$baseUrl/family-tasks/$taskId');
+    final response = await http.patch(
+      uri,
+      headers: _authHeaders(token),
+      body: jsonEncode(fields),
+    );
+    _ensureSuccess(response);
+    return FamilyTask.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<void> deleteFamilyTask({
+    required String token,
+    required int taskId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/family-tasks/$taskId');
+    final response = await http.delete(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+  }
+
   Future<List<ActivityItem>> getActivities({
     required String token,
     required int familyId,
@@ -482,7 +559,128 @@ class ApiClient {
     final response = await http.get(uri, headers: _authHeaders(token));
     _ensureSuccess(response);
     final data = jsonDecode(response.body) as List<dynamic>;
-    return data.map((e) => ActivityItem.fromJson(e as Map<String, dynamic>)).toList();
+    return data.map((e) => ActivityItem.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+  }
+
+  FamilyBrief _familyBriefFromJson(Map<String, dynamic> raw) {
+    final m = Map<String, dynamic>.from(raw);
+    final reply = m['reply'];
+    if (reply is Map) {
+      final r = Map<String, dynamic>.from(reply);
+      final au = r['audio_url'];
+      if (au is String && au.isNotEmpty) {
+        r['audio_url'] = _resolveImageUrl(au);
+      }
+      m['reply'] = r;
+    }
+    return FamilyBrief.fromJson(m);
+  }
+
+  Future<List<FamilyBrief>> listFamilyBriefs({
+    required String token,
+    required int familyId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/families/$familyId/family-briefs');
+    final response = await http.get(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+    final data = jsonDecode(response.body) as List<dynamic>;
+    return data.map((e) => _familyBriefFromJson(Map<String, dynamic>.from(e as Map))).toList();
+  }
+
+  Future<FamilyBrief?> getPendingFamilyBrief({
+    required String token,
+    required int familyId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/families/$familyId/family-briefs/pending');
+    final response = await http.get(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+    final map = jsonDecode(response.body) as Map<String, dynamic>;
+    final b = map['brief'];
+    if (b == null) return null;
+    return _familyBriefFromJson(Map<String, dynamic>.from(b as Map));
+  }
+
+  Future<List<FamilyBrief>> listPendingFamilyBriefs({
+    required String token,
+    required int familyId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/families/$familyId/family-briefs/pending-list');
+    final response = await http.get(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+    final map = jsonDecode(response.body) as Map<String, dynamic>;
+    final raw = map['briefs'];
+    if (raw is! List<dynamic>) return [];
+    return raw
+        .map((e) => _familyBriefFromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  Future<FamilyBrief> getFamilyBrief({
+    required String token,
+    required int briefId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/family-briefs/$briefId');
+    final response = await http.get(uri, headers: _authHeaders(token));
+    _ensureSuccess(response);
+    return _familyBriefFromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<FamilyBrief> createFamilyBrief({
+    required String token,
+    required int familyId,
+    required String childStatusText,
+    String? contactNote,
+    required String questionText,
+    bool parentsOnly = false,
+  }) async {
+    final uri = Uri.parse('$baseUrl/families/$familyId/family-briefs');
+    final response = await http.post(
+      uri,
+      headers: _authHeaders(token),
+      body: jsonEncode({
+        'child_status_text': childStatusText,
+        'contact_note': contactNote,
+        'question_text': questionText,
+        'parents_only': parentsOnly,
+      }),
+    );
+    _ensureSuccess(response);
+    return _familyBriefFromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<FamilyBrief> replyFamilyBriefQuick({
+    required String token,
+    required int briefId,
+    required String quickText,
+  }) async {
+    final uri = Uri.parse('$baseUrl/family-briefs/$briefId/replies');
+    final response = await http.post(
+      uri,
+      headers: _authHeaders(token),
+      body: jsonEncode({
+        'reply_kind': 'quick',
+        'quick_text': quickText,
+      }),
+    );
+    _ensureSuccess(response);
+    return _familyBriefFromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<FamilyBrief> uploadFamilyBriefReplyVoice({
+    required String token,
+    required int briefId,
+    required String filePath,
+    required int durationSeconds,
+  }) async {
+    final uri = Uri.parse('$baseUrl/family-briefs/$briefId/replies/upload');
+    final request = http.MultipartRequest('POST', uri);
+    request.headers.addAll({'Authorization': 'Bearer $token'});
+    request.fields['duration_seconds'] = '$durationSeconds';
+    request.files.add(await http.MultipartFile.fromPath('file', filePath));
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+    _ensureSuccess(response);
+    return _familyBriefFromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   Future<List<Photo>> getPhotos({

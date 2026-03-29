@@ -177,6 +177,58 @@ def _migrate_schema(db):
         "ON users(supabase_user_id) WHERE supabase_user_id IS NOT NULL AND supabase_user_id != ''"
     )
     db.commit()
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS family_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            family_id INTEGER NOT NULL,
+            created_by_user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            assignee_label TEXT,
+            due_date TEXT,
+            done INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        """
+    )
+    db.commit()
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS family_briefs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            family_id INTEGER NOT NULL,
+            author_user_id INTEGER NOT NULL,
+            child_status_text TEXT NOT NULL,
+            contact_note TEXT,
+            question_text TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            reply_status INTEGER NOT NULL DEFAULT 0,
+            replied_at TEXT
+        );
+        """
+    )
+    db.commit()
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS family_brief_replies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            brief_id INTEGER NOT NULL UNIQUE,
+            author_user_id INTEGER NOT NULL,
+            reply_kind TEXT NOT NULL,
+            quick_text TEXT,
+            audio_url TEXT,
+            duration_seconds INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (brief_id) REFERENCES family_briefs(id)
+        );
+        """
+    )
+    db.commit()
+    fb_cols = [r[1] for r in db.execute("PRAGMA table_info(family_briefs)").fetchall()]
+    if "parents_only" not in fb_cols:
+        db.execute("ALTER TABLE family_briefs ADD COLUMN parents_only INTEGER NOT NULL DEFAULT 0")
+        db.commit()
 
 
 def now_iso() -> str:
@@ -209,6 +261,62 @@ def user_in_family(user_id: int, family_id: int) -> bool:
         (family_id, user_id),
     ).fetchone()
     return row is not None
+
+
+def _member_role(db, family_id: int, user_id: int) -> str:
+    row = db.execute(
+        "SELECT role FROM family_members WHERE family_id = ? AND user_id = ?",
+        (family_id, user_id),
+    ).fetchone()
+    if row is None:
+        return "member"
+    r = row["role"]
+    return (str(r).strip().lower() if r else "") or "member"
+
+
+def _is_parent_role(role: str) -> bool:
+    return role in ("parent", "parents")
+
+
+def _family_has_parent(db, family_id: int) -> bool:
+    row = db.execute(
+        """
+        SELECT COUNT(*) AS n FROM family_members
+        WHERE family_id = ? AND lower(trim(role)) IN ('parent', 'parents')
+        """,
+        (family_id,),
+    ).fetchone()
+    return int(row["n"] or 0) > 0
+
+
+def _brief_row_parents_only(row) -> bool:
+    try:
+        v = row["parents_only"]
+    except (KeyError, IndexError):
+        return False
+    return bool(v)
+
+
+def _brief_visible_to_viewer(db, row, viewer_id: int) -> bool:
+    if not _brief_row_parents_only(row):
+        return True
+    try:
+        rs = row["reply_status"]
+    except (KeyError, IndexError):
+        rs = 0
+    if int(rs or 0):
+        return True
+    if int(row["author_user_id"]) == int(viewer_id):
+        return True
+    return _is_parent_role(_member_role(db, int(row["family_id"]), viewer_id))
+
+
+def _can_user_reply_brief(db, family_id: int, caller_id: int, author_id: int) -> bool:
+    if int(caller_id) == int(author_id):
+        return False
+    if _family_has_parent(db, family_id):
+        return _is_parent_role(_member_role(db, family_id, caller_id))
+    return True
 
 
 def _normalize_supabase_uuid(raw) -> str | None:
@@ -645,7 +753,37 @@ def get_family(family_id: int):
     ).fetchone()
     if family is None:
         return jsonify({"error": "family not found"}), 404
-    return jsonify(dict(family))
+    parent_n = db.execute(
+        """
+        SELECT COUNT(*) AS n FROM family_members
+        WHERE family_id = ? AND lower(trim(role)) IN ('parent', 'parents')
+        """,
+        (family_id,),
+    ).fetchone()
+    out = dict(family)
+    out["my_role"] = _member_role(db, family_id, caller_user_id)
+    out["family_has_parent_role"] = bool(int(parent_n["n"] or 0) > 0)
+    return jsonify(out)
+
+
+@app.route("/families/<int:family_id>/members/me", methods=["PATCH"])
+def patch_my_family_member_role(family_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+    payload = request.get_json(force=True)
+    role = str(payload.get("role") or "").strip().lower()
+    if role not in ("member", "parent", "child"):
+        return jsonify({"error": "role must be member, parent, or child"}), 400
+    db = get_db()
+    db.execute(
+        "UPDATE family_members SET role = ? WHERE family_id = ? AND user_id = ?",
+        (role, family_id, caller_user_id),
+    )
+    db.commit()
+    return jsonify({"message": "updated", "role": role})
 
 
 @app.route("/families/<int:family_id>/members", methods=["GET"])
@@ -1185,7 +1323,8 @@ def list_family_activities(family_id: int):
                 dq.id AS activity_id,
                 'Family member' AS actor_name,
                 dq.question_text AS content,
-                dq.created_at AS created_at
+                dq.created_at AS created_at,
+                CAST(NULL AS INTEGER) AS brief_id
             FROM daily_questions dq
             WHERE dq.family_id = ?
 
@@ -1196,7 +1335,8 @@ def list_family_activities(family_id: int):
                 p.id AS activity_id,
                 u.display_name AS actor_name,
                 COALESCE(p.caption, '') AS content,
-                p.created_at AS created_at
+                p.created_at AS created_at,
+                CAST(NULL AS INTEGER) AS brief_id
             FROM photos p
             JOIN users u ON u.id = p.uploader_user_id
             WHERE p.family_id = ?
@@ -1208,7 +1348,8 @@ def list_family_activities(family_id: int):
                 da.id AS activity_id,
                 u.display_name AS actor_name,
                 da.answer_text AS content,
-                da.created_at AS created_at
+                da.created_at AS created_at,
+                CAST(NULL AS INTEGER) AS brief_id
             FROM daily_answers da
             JOIN daily_questions dq ON dq.id = da.question_id
             JOIN users u ON u.id = da.user_id
@@ -1221,16 +1362,93 @@ def list_family_activities(family_id: int):
                 pc.id AS activity_id,
                 u.display_name AS actor_name,
                 pc.content AS content,
-                pc.created_at AS created_at
+                pc.created_at AS created_at,
+                CAST(NULL AS INTEGER) AS brief_id
             FROM photo_comments pc
             JOIN photos p ON p.id = pc.photo_id
             JOIN users u ON u.id = pc.user_id
             WHERE p.family_id = ?
+
+            UNION ALL
+
+            SELECT
+                'family_task' AS activity_type,
+                ft.id AS activity_id,
+                u.display_name AS actor_name,
+                ft.title AS content,
+                ft.created_at AS created_at,
+                CAST(NULL AS INTEGER) AS brief_id
+            FROM family_tasks ft
+            JOIN users u ON u.id = ft.created_by_user_id
+            WHERE ft.family_id = ?
+
+            UNION ALL
+
+            SELECT
+                'family_brief' AS activity_type,
+                fb.id AS activity_id,
+                u.display_name AS actor_name,
+                substr(
+                    fb.child_status_text || ' · ' || COALESCE(fb.contact_note, '') || ' · ' || fb.question_text,
+                    1,
+                    500
+                ) AS content,
+                fb.created_at AS created_at,
+                fb.id AS brief_id
+            FROM family_briefs fb
+            JOIN users u ON u.id = fb.author_user_id
+            WHERE fb.family_id = ?
+              AND (
+                COALESCE(fb.parents_only, 0) = 0
+                OR fb.reply_status != 0
+                OR fb.author_user_id = ?
+                OR EXISTS (
+                    SELECT 1 FROM family_members fm
+                    WHERE fm.family_id = fb.family_id AND fm.user_id = ?
+                      AND lower(trim(fm.role)) IN ('parent', 'parents')
+                )
+              )
+
+            UNION ALL
+
+            SELECT
+                'family_brief_reply' AS activity_type,
+                r.id AS activity_id,
+                u.display_name AS actor_name,
+                COALESCE(r.quick_text, '[voice]') AS content,
+                r.created_at AS created_at,
+                r.brief_id AS brief_id
+            FROM family_brief_replies r
+            JOIN family_briefs fb ON fb.id = r.brief_id
+            JOIN users u ON u.id = r.author_user_id
+            WHERE fb.family_id = ?
+              AND (
+                COALESCE(fb.parents_only, 0) = 0
+                OR fb.reply_status != 0
+                OR fb.author_user_id = ?
+                OR EXISTS (
+                    SELECT 1 FROM family_members fm
+                    WHERE fm.family_id = fb.family_id AND fm.user_id = ?
+                      AND lower(trim(fm.role)) IN ('parent', 'parents')
+                )
+              )
         )
         ORDER BY created_at DESC
         LIMIT 50
         """,
-        (family_id, family_id, family_id, family_id),
+        (
+            family_id,
+            family_id,
+            family_id,
+            family_id,
+            family_id,
+            family_id,
+            caller_user_id,
+            caller_user_id,
+            family_id,
+            caller_user_id,
+            caller_user_id,
+        ),
     ).fetchall()
     return jsonify([dict(r) for r in rows])
 
@@ -1296,6 +1514,487 @@ def delete_birthday_reminder(reminder_id: int):
     db.execute("DELETE FROM birthday_reminders WHERE id = ?", (reminder_id,))
     db.commit()
     return jsonify({"message": "deleted"})
+
+
+@app.route("/family-tasks", methods=["POST"])
+def create_family_task():
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    payload = request.get_json(force=True)
+    family_id = int(payload["family_id"])
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+    title = (payload.get("title") or "").strip()
+    if not title:
+        return jsonify({"error": "title required"}), 400
+    assignee_raw = payload.get("assignee_label")
+    assignee_label = (str(assignee_raw).strip() if assignee_raw is not None else "") or None
+    due_raw = payload.get("due_date")
+    due_date = None
+    if due_raw is not None and str(due_raw).strip():
+        due_date = str(due_raw).strip()
+    ts = now_iso()
+    db = get_db()
+    db.execute(
+        """
+        INSERT INTO family_tasks (
+            family_id, created_by_user_id, title, assignee_label, due_date, done, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+        """,
+        (family_id, caller_user_id, title, assignee_label, due_date, ts, ts),
+    )
+    db.commit()
+    task_id = int(db.execute("SELECT last_insert_rowid()").fetchone()[0])
+    actor_name = _user_display_name(db, caller_user_id)
+    _schedule_family_fcm_notify(
+        family_id,
+        caller_user_id,
+        "Family task",
+        f'{actor_name} added a task: "{title}"',
+        {
+            "type": "local_family_task",
+            "family_id": str(family_id),
+            "task_id": str(task_id),
+        },
+    )
+    row = db.execute(
+        """
+        SELECT id, family_id, created_by_user_id, title, assignee_label, due_date, done, created_at, updated_at
+        FROM family_tasks WHERE id = ?
+        """,
+        (task_id,),
+    ).fetchone()
+    return jsonify(_family_task_row_dict(row))
+
+
+@app.route("/families/<int:family_id>/family-tasks", methods=["GET"])
+def list_family_tasks(family_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT id, family_id, created_by_user_id, title, assignee_label, due_date, done, created_at, updated_at
+        FROM family_tasks
+        WHERE family_id = ?
+        ORDER BY done ASC,
+                 CASE WHEN due_date IS NULL OR due_date = '' THEN 1 ELSE 0 END,
+                 due_date ASC,
+                 id DESC
+        """,
+        (family_id,),
+    ).fetchall()
+    return jsonify([_family_task_row_dict(r) for r in rows])
+
+
+def _family_task_row_dict(row) -> dict:
+    return {
+        "id": row["id"],
+        "family_id": row["family_id"],
+        "created_by_user_id": row["created_by_user_id"],
+        "title": row["title"],
+        "assignee_label": row["assignee_label"],
+        "due_date": row["due_date"],
+        "done": bool(row["done"]),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+@app.route("/family-tasks/<int:task_id>", methods=["PATCH"])
+def patch_family_task(task_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    payload = request.get_json(force=True)
+    db = get_db()
+    row = db.execute(
+        "SELECT id, family_id FROM family_tasks WHERE id = ?",
+        (task_id,),
+    ).fetchone()
+    if row is None:
+        return jsonify({"error": "task not found"}), 404
+    if not user_in_family(caller_user_id, row["family_id"]):
+        return jsonify({"error": "forbidden"}), 403
+    fields = []
+    params = []
+    if "title" in payload:
+        t = (payload.get("title") or "").strip()
+        if not t:
+            return jsonify({"error": "title cannot be empty"}), 400
+        fields.append("title = ?")
+        params.append(t)
+    if "assignee_label" in payload:
+        a = payload.get("assignee_label")
+        val = (str(a).strip() if a is not None else "") or None
+        fields.append("assignee_label = ?")
+        params.append(val)
+    if "due_date" in payload:
+        d = payload.get("due_date")
+        val = None if d is None or str(d).strip() == "" else str(d).strip()
+        fields.append("due_date = ?")
+        params.append(val)
+    if "done" in payload:
+        fields.append("done = ?")
+        params.append(1 if bool(payload.get("done")) else 0)
+    if not fields:
+        return jsonify({"error": "no update fields"}), 400
+    fields.append("updated_at = ?")
+    params.append(now_iso())
+    params.append(task_id)
+    db.execute(f"UPDATE family_tasks SET {', '.join(fields)} WHERE id = ?", params)
+    db.commit()
+    updated = db.execute(
+        """
+        SELECT id, family_id, created_by_user_id, title, assignee_label, due_date, done, created_at, updated_at
+        FROM family_tasks WHERE id = ?
+        """,
+        (task_id,),
+    ).fetchone()
+    return jsonify(_family_task_row_dict(updated))
+
+
+@app.route("/family-tasks/<int:task_id>", methods=["DELETE"])
+def delete_family_task(task_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    db = get_db()
+    row = db.execute(
+        "SELECT id, family_id FROM family_tasks WHERE id = ?",
+        (task_id,),
+    ).fetchone()
+    if row is None:
+        return jsonify({"error": "task not found"}), 404
+    if not user_in_family(caller_user_id, row["family_id"]):
+        return jsonify({"error": "forbidden"}), 403
+    db.execute("DELETE FROM family_tasks WHERE id = ?", (task_id,))
+    db.commit()
+    return jsonify({"message": "deleted"})
+
+
+def _family_brief_reply_dict(db, brief_id: int) -> dict | None:
+    row = db.execute(
+        """
+        SELECT
+            r.id,
+            r.brief_id,
+            r.author_user_id,
+            u.display_name AS author_display_name,
+            r.reply_kind,
+            r.quick_text,
+            r.audio_url,
+            r.duration_seconds,
+            r.created_at
+        FROM family_brief_replies r
+        JOIN users u ON u.id = r.author_user_id
+        WHERE r.brief_id = ?
+        """,
+        (brief_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return {
+        "id": row["id"],
+        "brief_id": row["brief_id"],
+        "author_user_id": row["author_user_id"],
+        "author_display_name": row["author_display_name"],
+        "reply_kind": row["reply_kind"],
+        "quick_text": row["quick_text"],
+        "audio_url": row["audio_url"],
+        "duration_seconds": int(row["duration_seconds"] or 0),
+        "created_at": row["created_at"],
+    }
+
+
+def _family_brief_dict(db, row) -> dict:
+    brief_id = int(row["id"])
+    reply = _family_brief_reply_dict(db, brief_id)
+    author_name = db.execute(
+        "SELECT display_name FROM users WHERE id = ?",
+        (row["author_user_id"],),
+    ).fetchone()
+    return {
+        "id": brief_id,
+        "family_id": row["family_id"],
+        "author_user_id": row["author_user_id"],
+        "author_display_name": author_name["display_name"] if author_name else "Unknown",
+        "child_status_text": row["child_status_text"],
+        "contact_note": row["contact_note"],
+        "question_text": row["question_text"],
+        "created_at": row["created_at"],
+        "reply_status": "replied" if row["reply_status"] else "pending",
+        "replied_at": row["replied_at"],
+        "reply": reply,
+        "parents_only": _brief_row_parents_only(row),
+    }
+
+
+@app.route("/families/<int:family_id>/family-briefs", methods=["POST"])
+def create_family_brief(family_id: int):
+    """Family check-in; optional parents_only (only parents see until replied)."""
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+    payload = request.get_json(force=True)
+    child_status = (payload.get("child_status_text") or "").strip()
+    question = (payload.get("question_text") or "").strip()
+    contact_raw = payload.get("contact_note")
+    contact_note = (str(contact_raw).strip() if contact_raw is not None else "") or None
+    parents_only = bool(payload.get("parents_only", False))
+    if not child_status or not question:
+        return jsonify({"error": "child_status_text and question_text are required"}), 400
+    ts = now_iso()
+    db = get_db()
+    db.execute(
+        """
+        INSERT INTO family_briefs (
+            family_id, author_user_id, child_status_text, contact_note, question_text,
+            created_at, reply_status, replied_at, parents_only
+        )
+        VALUES (?, ?, ?, ?, ?, ?, 0, NULL, ?)
+        """,
+        (family_id, caller_user_id, child_status, contact_note, question, ts, 1 if parents_only else 0),
+    )
+    db.commit()
+    brief_id = int(db.execute("SELECT last_insert_rowid()").fetchone()[0])
+    row = db.execute("SELECT * FROM family_briefs WHERE id = ?", (brief_id,)).fetchone()
+    actor_name = _user_display_name(db, caller_user_id)
+    _schedule_family_fcm_notify(
+        family_id,
+        caller_user_id,
+        "Family brief",
+        f"{actor_name} sent a family check-in",
+        {
+            "type": "local_family_brief",
+            "family_id": str(family_id),
+            "brief_id": str(brief_id),
+        },
+    )
+    return jsonify(_family_brief_dict(db, row))
+
+
+@app.route("/families/<int:family_id>/family-briefs", methods=["GET"])
+def list_family_briefs(family_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT * FROM family_briefs
+        WHERE family_id = ?
+        ORDER BY id DESC
+        LIMIT 40
+        """,
+        (family_id,),
+    ).fetchall()
+    visible = [r for r in rows if _brief_visible_to_viewer(db, r, caller_user_id)]
+    return jsonify([_family_brief_dict(db, r) for r in visible])
+
+
+@app.route("/families/<int:family_id>/family-briefs/pending", methods=["GET"])
+def get_pending_family_brief(family_id: int):
+    """Latest unanswered brief visible to caller (backward compatible)."""
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT * FROM family_briefs
+        WHERE family_id = ? AND reply_status = 0
+        ORDER BY id DESC
+        """,
+        (family_id,),
+    ).fetchall()
+    for row in rows:
+        if _brief_visible_to_viewer(db, row, caller_user_id):
+            return jsonify({"brief": _family_brief_dict(db, row)})
+    return jsonify({"brief": None})
+
+
+@app.route("/families/<int:family_id>/family-briefs/pending-list", methods=["GET"])
+def list_pending_family_briefs(family_id: int):
+    """All unanswered briefs visible to caller (for home 'to reply' list)."""
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    if not user_in_family(caller_user_id, family_id):
+        return jsonify({"error": "forbidden"}), 403
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT * FROM family_briefs
+        WHERE family_id = ? AND reply_status = 0
+        ORDER BY id DESC
+        LIMIT 40
+        """,
+        (family_id,),
+    ).fetchall()
+    visible = [r for r in rows if _brief_visible_to_viewer(db, r, caller_user_id)]
+    return jsonify({"briefs": [_family_brief_dict(db, r) for r in visible]})
+
+
+@app.route("/family-briefs/<int:brief_id>", methods=["GET"])
+def get_family_brief(brief_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    db = get_db()
+    row = db.execute("SELECT * FROM family_briefs WHERE id = ?", (brief_id,)).fetchone()
+    if row is None:
+        return jsonify({"error": "brief not found"}), 404
+    if not user_in_family(caller_user_id, row["family_id"]):
+        return jsonify({"error": "forbidden"}), 403
+    if not _brief_visible_to_viewer(db, row, caller_user_id):
+        return jsonify({"error": "forbidden"}), 403
+    return jsonify(_family_brief_dict(db, row))
+
+
+def _create_family_brief_reply_core(
+    db,
+    brief_id: int,
+    caller_user_id: int,
+    reply_kind: str,
+    quick_text: str | None,
+    audio_url: str | None,
+    duration_seconds: int,
+) -> dict:
+    row = db.execute("SELECT * FROM family_briefs WHERE id = ?", (brief_id,)).fetchone()
+    if row is None:
+        return {"error": "brief not found", "code": 404}
+    if not user_in_family(caller_user_id, row["family_id"]):
+        return {"error": "forbidden", "code": 403}
+    if not _brief_visible_to_viewer(db, row, caller_user_id):
+        return {"error": "forbidden", "code": 403}
+    if row["author_user_id"] == caller_user_id:
+        return {"error": "author cannot reply to own brief", "code": 400}
+    fam_id = int(row["family_id"])
+    if not _can_user_reply_brief(db, fam_id, caller_user_id, row["author_user_id"]):
+        return {"error": "only parents can reply when a parent role is set in the family", "code": 403}
+    if row["reply_status"]:
+        return {"error": "brief already replied", "code": 400}
+    if reply_kind not in ("quick", "voice"):
+        return {"error": "reply_kind must be quick or voice", "code": 400}
+    if reply_kind == "quick":
+        qt = (quick_text or "").strip()
+        if not qt:
+            return {"error": "quick_text required for quick reply", "code": 400}
+        audio_url = None
+        duration_seconds = 0
+    else:
+        au = (audio_url or "").strip()
+        if not au:
+            return {"error": "audio_url required for voice reply", "code": 400}
+        if duration_seconds > 60:
+            return {"error": "voice reply max 60 seconds", "code": 400}
+        quick_text = None
+    ts = now_iso()
+    try:
+        db.execute(
+            """
+            INSERT INTO family_brief_replies (
+                brief_id, author_user_id, reply_kind, quick_text, audio_url, duration_seconds, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (brief_id, caller_user_id, reply_kind, quick_text, audio_url, duration_seconds, ts),
+        )
+    except sqlite3.IntegrityError:
+        return {"error": "brief already replied", "code": 400}
+    db.execute(
+        "UPDATE family_briefs SET reply_status = 1, replied_at = ? WHERE id = ?",
+        (ts, brief_id),
+    )
+    db.commit()
+    family_id = row["family_id"]
+    replier_name = _user_display_name(db, caller_user_id)
+    # Exclude replier; author and other members receive the update.
+    _schedule_family_fcm_notify(
+        family_id,
+        caller_user_id,
+        "Family brief",
+        f"{replier_name} replied to the check-in",
+        {
+            "type": "local_family_brief_reply",
+            "family_id": str(family_id),
+            "brief_id": str(brief_id),
+        },
+    )
+    refreshed = db.execute("SELECT * FROM family_briefs WHERE id = ?", (brief_id,)).fetchone()
+    return {"brief": _family_brief_dict(db, refreshed)}
+
+
+@app.route("/family-briefs/<int:brief_id>/replies", methods=["POST"])
+def post_family_brief_reply(brief_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    payload = request.get_json(force=True)
+    reply_kind = (payload.get("reply_kind") or "quick").strip()
+    quick_text = payload.get("quick_text")
+    audio_url = payload.get("audio_url")
+    duration_seconds = int(payload.get("duration_seconds", 0))
+    db = get_db()
+    result = _create_family_brief_reply_core(
+        db, brief_id, caller_user_id, reply_kind, quick_text, audio_url, duration_seconds
+    )
+    if "error" in result and "brief" not in result:
+        return jsonify({"error": result["error"]}), int(result.get("code", 400))
+    return jsonify(result["brief"])
+
+
+@app.route("/family-briefs/<int:brief_id>/replies/upload", methods=["POST"])
+def upload_family_brief_reply_voice(brief_id: int):
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    db = get_db()
+    row = db.execute("SELECT * FROM family_briefs WHERE id = ?", (brief_id,)).fetchone()
+    if row is None:
+        return jsonify({"error": "brief not found"}), 404
+    if not user_in_family(caller_user_id, row["family_id"]):
+        return jsonify({"error": "forbidden"}), 403
+    if "file" not in request.files:
+        return jsonify({"error": "file required"}), 400
+    file = request.files["file"]
+    duration_raw = request.form.get("duration_seconds", "0")
+    try:
+        duration_seconds = int(duration_raw)
+    except ValueError:
+        duration_seconds = 0
+    if duration_seconds > 60:
+        return jsonify({"error": "voice reply max 60 seconds"}), 400
+    filename = secure_filename(file.filename or "voice.m4a")
+    suffix = Path(filename).suffix.lower() or ".m4a"
+    if suffix not in (".m4a", ".aac", ".mp3", ".wav", ".ogg", ".webm"):
+        suffix = ".m4a"
+    saved_name = f"brief_reply_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{secrets.token_hex(6)}{suffix}"
+    save_path = UPLOAD_DIR / saved_name
+    file.save(save_path)
+    audio_url = f"/uploads/{saved_name}"
+    result = _create_family_brief_reply_core(
+        db, brief_id, caller_user_id, "voice", None, audio_url, duration_seconds
+    )
+    if "error" in result and "brief" not in result:
+        if audio_url.startswith("/uploads/"):
+            fp = UPLOAD_DIR / audio_url.replace("/uploads/", "", 1)
+            if fp.exists():
+                fp.unlink()
+        return jsonify({"error": result["error"]}), int(result.get("code", 400))
+    return jsonify(result["brief"])
 
 
 @app.route("/families/<int:family_id>/status-updates", methods=["POST"])

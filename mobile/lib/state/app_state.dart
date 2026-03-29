@@ -11,6 +11,8 @@ import 'package:family_mobile/models/voice_message.dart';
 import 'package:family_mobile/models/emergency_contact.dart';
 import 'package:family_mobile/models/care_reminder.dart';
 import 'package:family_mobile/models/medical_card.dart';
+import 'package:family_mobile/models/family_task.dart';
+import 'package:family_mobile/models/family_brief.dart';
 import 'package:family_mobile/util/pending_voice_file.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -43,6 +45,10 @@ class AppState extends ChangeNotifier {
   List<EmergencyContact> emergencyContacts = [];
   MedicalCard? medicalCard;
   List<CareReminder> careReminders = [];
+  List<FamilyTask> familyTasks = [];
+  List<FamilyBrief> familyBriefs = [];
+  FamilyBrief? pendingFamilyBrief;
+  List<FamilyBrief> pendingFamilyBriefs = [];
   Map<int, List<PhotoComment>> photoComments = {};
   Map<int, List<DailyAnswer>> dailyAnswers = {};
   Map<String, dynamic>? pendingVoiceUpload;
@@ -54,6 +60,15 @@ class AppState extends ChangeNotifier {
   bool get hasSupabaseSession => Supabase.instance.client.auth.currentSession != null;
   bool get isLoggedIn => hasFlaskSession || hasSupabaseSession;
   bool get hasPendingVoiceUpload => pendingVoiceUpload != null;
+
+  /// When any member has role parent, only parents may reply to others' check-ins.
+  bool get mayReplyToFamilyBriefs {
+    final f = family;
+    if (f == null) return true;
+    if (!f.familyHasParentRole) return true;
+    final r = f.myRole;
+    return r == 'parent' || r == 'parents';
+  }
 
   @override
   void dispose() {
@@ -432,6 +447,10 @@ class AppState extends ChangeNotifier {
     voiceMessages = [];
     emergencyContacts = [];
     careReminders = [];
+    familyTasks = [];
+    familyBriefs = [];
+    pendingFamilyBrief = null;
+    pendingFamilyBriefs = [];
     photoComments = {};
     dailyAnswers = {};
     pendingVoiceUpload = null;
@@ -472,6 +491,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _refreshHomeDataInternal() async {
+    family = await _apiClient.getFamily(token: token!, familyId: family!.id);
     dailyQuestions = await _apiClient.getDailyQuestions(token: token!, familyId: family!.id);
     photos = await _apiClient.getPhotos(token: token!, familyId: family!.id);
     birthdayReminders = await _apiClient.getBirthdayReminders(token: token!, familyId: family!.id);
@@ -481,6 +501,139 @@ class AppState extends ChangeNotifier {
     emergencyContacts = await _apiClient.getEmergencyContacts(token: token!, familyId: family!.id);
     medicalCard = await _apiClient.getMedicalCard(token: token!, familyId: family!.id);
     careReminders = await _apiClient.getCareReminders(token: token!, familyId: family!.id);
+    familyTasks = await _apiClient.getFamilyTasks(token: token!, familyId: family!.id);
+    try {
+      familyBriefs = await _apiClient.listFamilyBriefs(token: token!, familyId: family!.id);
+      pendingFamilyBriefs = await _apiClient.listPendingFamilyBriefs(token: token!, familyId: family!.id);
+      pendingFamilyBrief = pendingFamilyBriefs.isNotEmpty ? pendingFamilyBriefs.first : null;
+    } catch (_) {
+      familyBriefs = [];
+      pendingFamilyBriefs = [];
+      pendingFamilyBrief = null;
+    }
+  }
+
+  Future<void> patchMyFamilyMemberRole(String role) async {
+    if (token == null || family == null) return;
+    final r = role.trim().toLowerCase();
+    if (r.isEmpty) return;
+    await _runBusy(() async {
+      await _apiClient.patchMyFamilyMemberRole(token: token!, familyId: family!.id, role: r);
+      await _refreshHomeDataInternal();
+    });
+  }
+
+  Future<void> sendFamilyBrief({
+    required String childStatusText,
+    String? contactNote,
+    required String questionText,
+    bool parentsOnly = false,
+  }) async {
+    if (token == null || family == null) return;
+    final s = childStatusText.trim();
+    final q = questionText.trim();
+    if (s.isEmpty || q.isEmpty) return;
+    final cn = contactNote?.trim();
+    await _runBusy(() async {
+      await _apiClient.createFamilyBrief(
+        token: token!,
+        familyId: family!.id,
+        childStatusText: s,
+        contactNote: (cn != null && cn.isNotEmpty) ? cn : null,
+        questionText: q,
+        parentsOnly: parentsOnly,
+      );
+      await _refreshHomeDataInternal();
+    });
+  }
+
+  Future<void> replyFamilyBriefQuick({
+    required int briefId,
+    required String quickText,
+  }) async {
+    if (token == null || family == null) return;
+    final t = quickText.trim();
+    if (t.isEmpty) return;
+    await _runBusy(() async {
+      await _apiClient.replyFamilyBriefQuick(token: token!, briefId: briefId, quickText: t);
+      await _refreshHomeDataInternal();
+    });
+  }
+
+  Future<FamilyBrief?> fetchFamilyBrief(int briefId) async {
+    if (token == null) return null;
+    try {
+      return await _apiClient.getFamilyBrief(token: token!, briefId: briefId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> replyFamilyBriefVoice({
+    required int briefId,
+    required String filePath,
+    required int durationSeconds,
+  }) async {
+    if (token == null || family == null) return;
+    await _runBusy(() async {
+      final stablePath = await materializeVoiceFileForRetry(filePath);
+      if (stablePath == null) {
+        throw Exception('Voice file not found');
+      }
+      await _apiClient.uploadFamilyBriefReplyVoice(
+        token: token!,
+        briefId: briefId,
+        filePath: stablePath,
+        durationSeconds: durationSeconds > 60 ? 60 : durationSeconds,
+      );
+      await removeMaterializedVoiceFile(stablePath);
+      await _refreshHomeDataInternal();
+    });
+  }
+
+  Future<void> addFamilyTask({
+    required String title,
+    String? assigneeLabel,
+    String? dueDate,
+  }) async {
+    if (token == null || family == null) return;
+    final t = title.trim();
+    if (t.isEmpty) return;
+    final al = assigneeLabel?.trim();
+    final du = dueDate?.trim();
+    await _runBusy(() async {
+      await _apiClient.createFamilyTask(
+        token: token!,
+        familyId: family!.id,
+        title: t,
+        assigneeLabel: (al != null && al.isNotEmpty) ? al : null,
+        dueDate: (du != null && du.isNotEmpty) ? du : null,
+      );
+      await _refreshHomeDataInternal();
+    });
+  }
+
+  Future<void> setFamilyTaskDone({
+    required int taskId,
+    required bool done,
+  }) async {
+    if (token == null || family == null) return;
+    await _runBusy(() async {
+      await _apiClient.updateFamilyTask(
+        token: token!,
+        taskId: taskId,
+        fields: {'done': done},
+      );
+      await _refreshHomeDataInternal();
+    });
+  }
+
+  Future<void> removeFamilyTask(int taskId) async {
+    if (token == null || family == null) return;
+    await _runBusy(() async {
+      await _apiClient.deleteFamilyTask(token: token!, taskId: taskId);
+      await _refreshHomeDataInternal();
+    });
   }
 
   Future<void> addStatusUpdate({
