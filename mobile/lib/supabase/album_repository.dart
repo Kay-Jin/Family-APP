@@ -79,6 +79,22 @@ class AlbumRepository {
     return CloudAlbumPhoto.fromJson(Map<String, dynamic>.from(row as Map));
   }
 
+  Future<CloudAlbumPhoto> updateCaption({
+    required String photoId,
+    required String caption,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw Exception('Not signed in');
+    final row = await _client
+        .from('family_photos')
+        .update({'caption': caption.trim()})
+        .eq('id', photoId)
+        .eq('user_id', user.id)
+        .select()
+        .single();
+    return CloudAlbumPhoto.fromJson(Map<String, dynamic>.from(row as Map));
+  }
+
   Future<void> deletePhoto(CloudAlbumPhoto photo) async {
     final user = _client.auth.currentUser;
     if (user == null) throw Exception('Not signed in');

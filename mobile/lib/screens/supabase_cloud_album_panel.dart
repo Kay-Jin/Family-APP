@@ -1,4 +1,5 @@
 import 'package:family_mobile/l10n/app_strings.dart';
+import 'package:family_mobile/screens/supabase_album_photo_viewer.dart';
 import 'package:family_mobile/supabase/album_repository.dart';
 import 'package:family_mobile/supabase/cloud_album_photo.dart';
 import 'package:family_mobile/util/api_error_message.dart';
@@ -108,6 +109,21 @@ class _SupabaseCloudAlbumPanelState extends State<SupabaseCloudAlbumPanel> {
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
+  }
+
+  Future<void> _openViewer(CloudAlbumPhoto photo, String url, bool mine) async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute<bool>(
+        fullscreenDialog: true,
+        builder: (ctx) => SupabaseAlbumPhotoViewer(
+          photo: photo,
+          imageUrl: url,
+          canEditCaption: mine,
+        ),
+      ),
+    );
+    if (changed == true && mounted) await _refresh();
   }
 
   Future<void> _confirmDelete(CloudAlbumPhoto photo) async {
@@ -226,13 +242,22 @@ class _SupabaseCloudAlbumPanelState extends State<SupabaseCloudAlbumPanel> {
                             child: Stack(
                               fit: StackFit.expand,
                               children: [
-                                Image.network(
-                                  url,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Center(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(8),
-                                      child: Text(_t('answer_image_failed'), textAlign: TextAlign.center),
+                                Material(
+                                  color: Colors.grey.shade200,
+                                  child: InkWell(
+                                    onTap: () => _openViewer(photo, url, mine),
+                                    child: Hero(
+                                      tag: 'cloud_album_${photo.id}',
+                                      child: Image.network(
+                                        url,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => Center(
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(8),
+                                            child: Text(_t('answer_image_failed'), textAlign: TextAlign.center),
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
