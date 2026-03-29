@@ -57,9 +57,13 @@ class _SupabaseFamilyScreenState extends State<SupabaseFamilyScreen> {
     if (picked == null || !mounted) return;
     await CareLocalNotifications.setReminderTime(hour: picked.hour, minute: picked.minute);
     if (!mounted) return;
+    final reminderOn = _dailyReminder;
     setState(() => _reminderTime = picked);
+    final msgKey = reminderOn
+        ? 'snack_reminder_time_updated'
+        : 'snack_reminder_time_saved_reminder_off';
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(_t('snack_reminder_time_updated'))),
+      SnackBar(content: Text(_t(msgKey))),
     );
   }
 
