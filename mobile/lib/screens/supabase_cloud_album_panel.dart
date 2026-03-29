@@ -1,4 +1,5 @@
 import 'package:family_mobile/l10n/app_strings.dart';
+import 'package:family_mobile/widgets/cloud_empty_placeholder.dart';
 import 'package:family_mobile/screens/supabase_album_photo_viewer.dart';
 import 'package:family_mobile/supabase/album_repository.dart';
 import 'package:family_mobile/supabase/cloud_album_photo.dart';
@@ -235,7 +236,14 @@ class _SupabaseCloudAlbumPanelState extends State<SupabaseCloudAlbumPanel> {
             )
           else if (_photos.isEmpty)
             SliverFillRemaining(
-              child: Center(child: Text(_t('no_photos'), style: Theme.of(context).textTheme.bodyLarge)),
+              hasScrollBody: false,
+              child: Center(
+                child: CloudEmptyPlaceholder(
+                  icon: Icons.photo_library_outlined,
+                  title: _t('no_photos'),
+                  subtitle: _t('cloud_empty_album_hint'),
+                ),
+              ),
             )
           else
             SliverPadding(

@@ -1,4 +1,5 @@
 import 'package:family_mobile/l10n/app_strings.dart';
+import 'package:family_mobile/widgets/cloud_empty_placeholder.dart';
 import 'package:family_mobile/screens/supabase_cloud_album_panel.dart';
 import 'package:family_mobile/supabase/cloud_daily_answer.dart';
 import 'package:family_mobile/supabase/cloud_daily_question.dart';
@@ -250,9 +251,10 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
                           const Center(
                               child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
                         else if (_questions.isEmpty)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            child: Text(_t('no_questions'), style: Theme.of(context).textTheme.bodyMedium),
+                          CloudEmptyPlaceholder(
+                            icon: Icons.chat_bubble_outline_rounded,
+                            title: _t('no_questions'),
+                            subtitle: _t('cloud_empty_questions_hint'),
                           )
                         else
                           ..._questions.map((q) => _buildQuestionCard(q)),

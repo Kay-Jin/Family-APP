@@ -1,4 +1,5 @@
 import 'package:family_mobile/l10n/app_strings.dart';
+import 'package:family_mobile/widgets/cloud_empty_placeholder.dart';
 import 'package:family_mobile/screens/supabase_family_detail_screen.dart';
 import 'package:family_mobile/supabase/family_repository.dart';
 import 'package:family_mobile/supabase/family_row.dart';
@@ -185,6 +186,7 @@ class _SupabaseFamilyScreenState extends State<SupabaseFamilyScreen> {
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
           children: [
             TextField(
@@ -284,9 +286,10 @@ class _SupabaseFamilyScreenState extends State<SupabaseFamilyScreen> {
               ),
             ),
             if (!_loading && _families.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Center(child: Text(_t('no_cloud_families'))),
+              CloudEmptyPlaceholder(
+                icon: Icons.groups_outlined,
+                title: _t('no_cloud_families'),
+                subtitle: _t('cloud_empty_families_hint'),
               ),
           ],
         ),
