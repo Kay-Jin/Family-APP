@@ -218,6 +218,16 @@ class AppStrings {
       'error_reference': 'This item references data that is missing or was removed.',
       'error_duplicate': 'This record already exists.',
       'error_not_signed_in': 'Please sign in first.',
+      'error_auth_invalid_login':
+          'Wrong email or password, or this account does not exist in Supabase yet. Use Sign up once, or create the user in the Supabase Dashboard (Authentication → Users).',
+      'error_auth_email_not_confirmed':
+          'Please confirm your email (check inbox) or disable email confirmation in Supabase Auth settings for testing.',
+      'error_auth_signup_disabled':
+          'New sign-ups are disabled in this Supabase project. Ask the admin to create your user in the Dashboard.',
+      'error_auth_weak_password': 'Password is too weak. Choose a stronger one.',
+      'error_auth_detail': 'Sign-in: {msg}',
+      'login_first_time_hint':
+          'First time? Create jinshanglong@member.family / peimeiling@member.family in Supabase → Users, or tap Sign up with the same email and password.',
       'error_generic': 'Something went wrong. Please try again.',
       'snack_question_added': 'Question added.',
       'snack_answer_added': 'Answer posted.',
@@ -667,6 +677,16 @@ class AppStrings {
       'error_reference': '关联的数据不存在或已被删除。',
       'error_duplicate': '记录已存在，请勿重复提交。',
       'error_not_signed_in': '请先登录。',
+      'error_auth_invalid_login':
+          '邮箱或密码不对，或 Supabase 里还没有这个用户。可在控制台「Authentication → 用户」添加，或先用同一邮箱点「注册」创建。',
+      'error_auth_email_not_confirmed':
+          '请先完成邮箱验证（查收邮件），或在 Supabase 认证设置里暂时关闭「需要邮箱确认」以便测试。',
+      'error_auth_signup_disabled':
+          '当前项目关闭了自助注册，请管理员在 Supabase 控制台为你添加用户。',
+      'error_auth_weak_password': '密码强度不足，请换一个更复杂的密码。',
+      'error_auth_detail': '登录提示：{msg}',
+      'login_first_time_hint':
+          '首次使用：请在 Supabase 控制台创建 jinshanglong@member.family 与 peimeiling@member.family，或用相同邮箱密码各点一次「注册」。',
       'error_generic': '操作失败，请稍后重试。',
       'snack_question_added': '问题已发布。',
       'snack_answer_added': '回答已提交。',
@@ -1107,6 +1127,16 @@ class AppStrings {
       'error_reference': '연결된 데이터가 없거나 삭제되었습니다.',
       'error_duplicate': '이미 있는 기록입니다.',
       'error_not_signed_in': '먼저 로그인해 주세요.',
+      'error_auth_invalid_login':
+          '이메일·비밀번호가 틀렸거나 Supabase에 사용자가 없습니다. 대시보드 Authentication → Users에서 추가하거나, 같은 이메일로 한 번 가입하세요.',
+      'error_auth_email_not_confirmed':
+          '이메일 인증을 완료하거나, Supabase 인증 설정에서 이메일 확인을 끄고 테스트하세요.',
+      'error_auth_signup_disabled':
+          '이 프로젝트는 가입이 비활성화되어 있습니다. 관리자에게 사용자 생성을 요청하세요.',
+      'error_auth_weak_password': '비밀번호가 너무 약합니다. 더 강한 비밀번호를 사용하세요.',
+      'error_auth_detail': '로그인: {msg}',
+      'login_first_time_hint':
+          '첫 사용: Supabase에서 jinshanglong@member.family / peimeiling@member.family 사용자를 만들거나, 같은 이메일로 가입을 한 번 진행하세요.',
       'error_generic': '문제가 발생했습니다. 잠시 후 다시 시도하세요.',
       'snack_question_added': '질문이 추가되었습니다.',
       'snack_answer_added': '답변이 등록되었습니다.',

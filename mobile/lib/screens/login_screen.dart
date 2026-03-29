@@ -222,6 +222,14 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ],
                         ),
+                        const SizedBox(height: 8),
+                        Text(
+                          t.text('login_first_time_hint'),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: const Color(0xFF8D6E63),
+                                height: 1.35,
+                              ),
+                        ),
                         const SizedBox(height: 14),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,

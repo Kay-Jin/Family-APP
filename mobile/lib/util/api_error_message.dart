@@ -1,6 +1,31 @@
+import 'package:gotrue/gotrue.dart' show AuthException;
+
 /// Maps common Supabase / PostgREST / network failures to short, user-facing text.
 /// [tr] returns a localized string for the given message key.
 String apiErrorMessage(Object error, String Function(String key) tr) {
+  if (error is AuthException) {
+    final code = (error.code ?? '').toLowerCase();
+    final em = error.message.toLowerCase();
+    if (code == 'invalid_credentials' || em.contains('invalid login')) {
+      return tr('error_auth_invalid_login');
+    }
+    if (code == 'email_not_confirmed' || em.contains('email not confirmed')) {
+      return tr('error_auth_email_not_confirmed');
+    }
+    if (code == 'signup_disabled' || em.contains('signups not allowed')) {
+      return tr('error_auth_signup_disabled');
+    }
+    if (code.contains('already_registered') || em.contains('user already registered')) {
+      return tr('error_duplicate');
+    }
+    if (code == 'weak_password' || em.contains('password is')) {
+      return tr('error_auth_weak_password');
+    }
+    if (em.isNotEmpty) {
+      return tr('error_auth_detail').replaceAll('{msg}', error.message);
+    }
+  }
+
   final msg = error.toString();
   final lower = msg.toLowerCase();
 
@@ -34,6 +59,9 @@ String apiErrorMessage(Object error, String Function(String key) tr) {
   }
   if (lower.contains('not signed in') || lower.contains('not logged')) {
     return tr('error_not_signed_in');
+  }
+  if (lower.contains('care_e2ee_unlock_required')) {
+    return tr('care_e2ee_unlock_required');
   }
   if (lower.contains('answer_text_or_image_required')) {
     return tr('answer_text_or_image_required');

@@ -1,5 +1,6 @@
 import 'package:family_mobile/util/api_error_message.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gotrue/gotrue.dart';
 
 void main() {
   String tr(String k) => k;
@@ -24,6 +25,23 @@ void main() {
     test('maps wechat', () {
       expect(apiErrorMessage(StateError('wechat_not_installed'), tr), 'error_wechat_not_installed');
       expect(apiErrorMessage(Exception('wechat_auth_cancelled'), tr), 'error_wechat_cancelled');
+    });
+
+    test('maps Supabase AuthException', () {
+      expect(
+        apiErrorMessage(
+          AuthApiException('Invalid login credentials', statusCode: '400', code: 'invalid_credentials'),
+          tr,
+        ),
+        'error_auth_invalid_login',
+      );
+      expect(
+        apiErrorMessage(
+          AuthApiException('Email not confirmed', statusCode: '400', code: 'email_not_confirmed'),
+          tr,
+        ),
+        'error_auth_email_not_confirmed',
+      );
     });
 
     test('fallback generic', () {
