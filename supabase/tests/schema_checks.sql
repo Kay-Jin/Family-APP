@@ -141,12 +141,12 @@ WITH
   storage_bucket_album AS (
     SELECT
       'storage_bucket_family_album_images' AS check_id,
-      'storage.buckets row id=family_album_images missing, not public, or wrong size limit' AS detail
+      'storage.buckets row id=family_album_images missing, not private, or wrong size limit' AS detail
     WHERE NOT EXISTS (
       SELECT 1
       FROM storage.buckets b
       WHERE b.id = 'family_album_images'
-        AND b.public IS TRUE
+        AND b.public IS FALSE
         AND b.file_size_limit = 10485760
     )
   ),

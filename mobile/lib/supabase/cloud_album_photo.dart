@@ -15,7 +15,7 @@ class CloudAlbumPhoto {
   final String familyId;
   final String userId;
   final String caption;
-  /// Storage object path in bucket `family_album_images`.
+  /// Object path in private bucket `family_album_images` (load via signed URL, not public URL).
   final String imagePath;
   final String uploaderDisplayName;
   final String createdAt;

@@ -26,6 +26,7 @@ class _SupabaseCloudAlbumPanelState extends State<SupabaseCloudAlbumPanel> {
   bool _loading = true;
   String? _error;
   List<CloudAlbumPhoto> _photos = [];
+  Map<String, String> _signedUrlByPath = {};
   bool _uploading = false;
   Uint8List? _pendingBytes;
   String _pendingExt = 'jpg';
@@ -51,7 +52,13 @@ class _SupabaseCloudAlbumPanelState extends State<SupabaseCloudAlbumPanel> {
     });
     try {
       final list = await _repo.listPhotos(widget.familyId);
-      if (mounted) setState(() => _photos = list);
+      final urls = await _repo.signedAlbumImageUrls(list.map((p) => p.imagePath));
+      if (mounted) {
+        setState(() {
+          _photos = list;
+          _signedUrlByPath = urls;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _error = apiErrorMessage(e, _t));
     } finally {
@@ -111,14 +118,26 @@ class _SupabaseCloudAlbumPanelState extends State<SupabaseCloudAlbumPanel> {
     }
   }
 
-  Future<void> _openViewer(CloudAlbumPhoto photo, String url, bool mine) async {
+  Future<void> _openViewer(CloudAlbumPhoto photo, bool mine) async {
+    String? url = _signedUrlByPath[photo.imagePath];
+    try {
+      url ??= await _repo.signedAlbumImageUrl(photo.imagePath);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(apiErrorMessage(e, _t))),
+      );
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _signedUrlByPath[photo.imagePath] = url!);
     final changed = await Navigator.push<bool>(
       context,
       MaterialPageRoute<bool>(
         fullscreenDialog: true,
         builder: (ctx) => SupabaseAlbumPhotoViewer(
           photo: photo,
-          imageUrl: url,
+          imageUrl: url!,
           canEditCaption: mine,
         ),
       ),
@@ -231,7 +250,7 @@ class _SupabaseCloudAlbumPanelState extends State<SupabaseCloudAlbumPanel> {
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
                     final photo = _photos[index];
-                    final url = _repo.publicUrl(photo.imagePath);
+                    final url = _signedUrlByPath[photo.imagePath];
                     final mine = uid != null && uid == photo.userId;
                     return Card(
                       clipBehavior: Clip.antiAlias,
@@ -245,19 +264,30 @@ class _SupabaseCloudAlbumPanelState extends State<SupabaseCloudAlbumPanel> {
                                 Material(
                                   color: Colors.grey.shade200,
                                   child: InkWell(
-                                    onTap: () => _openViewer(photo, url, mine),
+                                    onTap: url != null ? () => _openViewer(photo, mine) : null,
                                     child: Hero(
                                       tag: 'cloud_album_${photo.id}',
-                                      child: Image.network(
-                                        url,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) => Center(
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(8),
-                                            child: Text(_t('answer_image_failed'), textAlign: TextAlign.center),
-                                          ),
-                                        ),
-                                      ),
+                                      child: url == null
+                                          ? Center(
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(8),
+                                                child: Text(
+                                                  _t('answer_image_failed'),
+                                                  textAlign: TextAlign.center,
+                                                  style: Theme.of(context).textTheme.bodySmall,
+                                                ),
+                                              ),
+                                            )
+                                          : Image.network(
+                                              url,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) => Center(
+                                                child: Padding(
+                                                  padding: const EdgeInsets.all(8),
+                                                  child: Text(_t('answer_image_failed'), textAlign: TextAlign.center),
+                                                ),
+                                              ),
+                                            ),
                                     ),
                                   ),
                                 ),

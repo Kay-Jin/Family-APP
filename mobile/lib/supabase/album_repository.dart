@@ -10,8 +10,25 @@ class AlbumRepository {
   final SupabaseClient _client;
   static const _bucket = 'family_album_images';
 
-  String publicUrl(String storagePath) {
-    return _client.storage.from(_bucket).getPublicUrl(storagePath);
+  /// Private bucket: short-lived URL for [Image.network] / full-screen viewer.
+  static const signedAlbumUrlExpirySeconds = 3600;
+
+  Future<String> signedAlbumImageUrl(String storagePath) async {
+    return _client.storage.from(_bucket).createSignedUrl(storagePath, signedAlbumUrlExpirySeconds);
+  }
+
+  /// One round-trip per distinct path; failures for a path are omitted from the map.
+  Future<Map<String, String>> signedAlbumImageUrls(Iterable<String> paths) async {
+    final out = <String, String>{};
+    for (final path in paths.toSet()) {
+      if (path.isEmpty) continue;
+      try {
+        out[path] = await signedAlbumImageUrl(path);
+      } catch (_) {
+        // Leave missing so UI can show error placeholder.
+      }
+    }
+    return out;
   }
 
   Future<List<CloudAlbumPhoto>> listPhotos(String familyId) async {

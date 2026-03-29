@@ -560,8 +560,9 @@ using (
   and public.is_member_of_family((split_part(name, '/', 1))::uuid)
 );
 
+-- Private: clients load via signed URLs (authenticated); answer images bucket stays public.
 insert into storage.buckets (id, name, public, file_size_limit)
-values ('family_album_images', 'family_album_images', true, 10485760)
+values ('family_album_images', 'family_album_images', false, 10485760)
 on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit;
 
 drop policy if exists "album_images_select_member" on storage.objects;
