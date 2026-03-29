@@ -1,7 +1,12 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:family_mobile/crypto/family_e2ee_policy.dart';
+import 'package:family_mobile/crypto/family_e2ee_session.dart';
+import 'package:family_mobile/crypto/family_passphrase_crypto.dart';
 import 'package:family_mobile/supabase/cloud_daily_answer.dart';
 import 'package:family_mobile/supabase/cloud_daily_question.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class DailyRepository {
@@ -51,13 +56,77 @@ class DailyRepository {
     return CloudDailyQuestion.fromJson(Map<String, dynamic>.from(row as Map));
   }
 
-  Future<List<CloudDailyAnswer>> listAnswers(String questionId) async {
+  Future<CloudDailyAnswer> _normalizeAnswer(String familyId, Map<String, dynamic> json) async {
+    final base = CloudDailyAnswer.fromJson(json);
+    final key = FamilyE2eeSession.keyFor(familyId);
+    final textV = base.answerEncryptionVersion;
+    final imgV = base.answerImageEncryptionVersion;
+    var text = base.answerText;
+    var textLocked = false;
+    if (textV >= 1 && base.answerCipherPayload != null && base.answerCipherPayload!.trim().isNotEmpty) {
+      if (key == null) {
+        text = '';
+        textLocked = true;
+      } else {
+        try {
+          text = await FamilyPassphraseCrypto.openUtf8String(
+            payloadJson: base.answerCipherPayload!,
+            keyBytes: key,
+          );
+        } catch (_) {
+          text = '';
+          textLocked = true;
+        }
+      }
+    }
+    final imageLocked = imgV >= 1 && key == null && base.imagePath != null && base.imagePath!.isNotEmpty;
+    return CloudDailyAnswer(
+      id: base.id,
+      questionId: base.questionId,
+      userId: base.userId,
+      userDisplayName: base.userDisplayName,
+      answerText: text,
+      imagePath: base.imagePath,
+      createdAt: base.createdAt,
+      answerEncryptionVersion: textV,
+      answerCipherPayload: base.answerCipherPayload,
+      answerImageEncryptionVersion: imgV,
+      answerTextLocked: textLocked,
+      answerImageLocked: imageLocked,
+    );
+  }
+
+  Future<List<CloudDailyAnswer>> listAnswers(String familyId, String questionId) async {
     final rows = await _client
         .from('daily_answers')
         .select()
         .eq('question_id', questionId)
         .order('created_at', ascending: false);
-    return (rows as List<dynamic>).map((e) => CloudDailyAnswer.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+    final out = <CloudDailyAnswer>[];
+    for (final e in rows as List<dynamic>) {
+      out.add(await _normalizeAnswer(familyId, Map<String, dynamic>.from(e as Map)));
+    }
+    return out;
+  }
+
+  Future<Uint8List?> loadDecryptedAnswerImageBytes({
+    required String familyId,
+    required CloudDailyAnswer answer,
+  }) async {
+    if (answer.answerImageEncryptionVersion < 1) return null;
+    final path = answer.imagePath;
+    if (path == null || path.isEmpty) return null;
+    final key = FamilyE2eeSession.keyFor(familyId);
+    if (key == null) return null;
+    final url = await signedAnswerImageUrl(path);
+    final r = await http.get(Uri.parse(url));
+    if (r.statusCode != 200) return null;
+    try {
+      final payload = utf8.decode(r.bodyBytes);
+      return await FamilyPassphraseCrypto.openBytes(payloadJson: payload, keyBytes: key);
+    } catch (_) {
+      return null;
+    }
   }
 
   String _contentTypeForExtension(String ext) {
@@ -90,32 +159,60 @@ class DailyRepository {
       throw Exception('answer_text_or_image_required');
     }
 
+    await FamilyE2eePolicy.assertWriteAllowed(_client, familyId);
+    final uses = await FamilyE2eePolicy.familyUsesCloudEncryption(_client, familyId);
+
     final metaName = user.userMetadata?['name'] ?? user.userMetadata?['full_name'];
     final name = metaName is String && metaName.isNotEmpty
         ? metaName
         : (user.email != null && user.email!.isNotEmpty ? user.email!.split('@').first : 'Member');
 
     String? imagePath;
+    var imgEncVer = 0;
     if (imageBytes != null && imageBytes.isNotEmpty) {
       var ext = (imageExtension ?? 'jpg').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
       if (ext.isEmpty) ext = 'jpg';
-      imagePath = '$familyId/${user.id}/${DateTime.now().millisecondsSinceEpoch}.$ext';
+      var pathExt = ext;
+      var uploadBytes = imageBytes;
+      var contentType = _contentTypeForExtension(ext);
+      if (uses) {
+        final key = FamilyE2eeSession.keyFor(familyId)!;
+        final sealed = await FamilyPassphraseCrypto.sealBytes(plaintext: imageBytes, keyBytes: key);
+        uploadBytes = Uint8List.fromList(utf8.encode(sealed));
+        contentType = 'application/octet-stream';
+        pathExt = 'e2ee';
+        imgEncVer = 1;
+      }
+      imagePath = '$familyId/${user.id}/${DateTime.now().millisecondsSinceEpoch}.$pathExt';
       await _client.storage.from(_answerImageBucket).uploadBinary(
             imagePath,
-            imageBytes,
+            uploadBytes,
             fileOptions: FileOptions(
-              contentType: _contentTypeForExtension(ext),
+              contentType: contentType,
               upsert: false,
             ),
           );
     }
 
-    await _client.from('daily_answers').insert({
+    final row = <String, dynamic>{
       'question_id': questionId,
       'user_id': user.id,
       'author_display_name': name,
-      'answer_text': trimmed.isEmpty ? ' ' : trimmed,
+      'answer_encryption_version': 0,
+      'answer_cipher_payload': null,
+      'answer_image_encryption_version': imgEncVer,
       if (imagePath != null) 'image_path': imagePath,
-    });
+    };
+
+    if (uses && trimmed.isNotEmpty) {
+      final key = FamilyE2eeSession.keyFor(familyId)!;
+      row['answer_cipher_payload'] = await FamilyPassphraseCrypto.sealUtf8String(plaintext: trimmed, keyBytes: key);
+      row['answer_encryption_version'] = 1;
+      row['answer_text'] = ' ';
+    } else {
+      row['answer_text'] = trimmed.isEmpty ? ' ' : trimmed;
+    }
+
+    await _client.from('daily_answers').insert(row);
   }
 }
