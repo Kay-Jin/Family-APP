@@ -50,3 +50,7 @@ curl -sS -X POST "https://YOUR_PROJECT.supabase.co/functions/v1/send-fcm-push" \
   -H "Content-Type: application/json" \
   -d '{"user_ids":["YOUR_USER_UUID"],"title":"Test","body":"From Edge"}'
 ```
+
+### Flask (SQLite) integration
+
+The repo backend can call this function after local-family events when `PUSH_DISPATCH_SECRET` + `SUPABASE_URL` are set in the Flask `.env`. Linked users are those with `users.supabase_user_id` set (`PATCH /users/me` from the app). See `../backend/README.md`.

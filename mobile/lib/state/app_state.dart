@@ -103,10 +103,25 @@ class AppState extends ChangeNotifier {
     await _authSubscription?.cancel();
     _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((_) {
       notifyListeners();
+      unawaited(_syncFlaskSupabaseLink());
     });
 
     isLoading = false;
     notifyListeners();
+    unawaited(_syncFlaskSupabaseLink());
+  }
+
+  /// When both Flask and Supabase sessions exist, register `auth.users.id` on the Flask user for FCM routing.
+  Future<void> _syncFlaskSupabaseLink() async {
+    final t = token;
+    if (t == null || t.isEmpty) return;
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid == null || uid.isEmpty) return;
+    try {
+      await _apiClient.patchMeSupabaseUserId(token: t, supabaseUserId: uid);
+    } catch (e, st) {
+      debugPrint('Flask–Supabase user link skipped: $e\n$st');
+    }
   }
 
   Future<void> signInWithEmail({
@@ -196,6 +211,7 @@ class AppState extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('token', token!);
       await prefs.setInt('user_id', userId!);
+      await _syncFlaskSupabaseLink();
     });
   }
 

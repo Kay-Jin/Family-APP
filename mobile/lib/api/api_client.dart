@@ -46,6 +46,20 @@ class ApiClient {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  /// Links this Flask user to [supabaseUserId] (`auth.users.id`) for server-triggered FCM to other family members.
+  Future<void> patchMeSupabaseUserId({
+    required String token,
+    required String supabaseUserId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/users/me');
+    final response = await http.patch(
+      uri,
+      headers: _authHeaders(token),
+      body: jsonEncode({'supabase_user_id': supabaseUserId}),
+    );
+    _ensureSuccess(response);
+  }
+
   Future<Family> createFamily({
     required String token,
     required String familyName,

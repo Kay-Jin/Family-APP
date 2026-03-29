@@ -39,16 +39,21 @@ Authorization: Bearer <token>
 
 Set **`JWT_SECRET`** in production (see `.env.example`). Default `dev-secret-change-me` is only for local use.
 
+### Push (local family → FCM via Supabase)
+
+Members who use **both** the Flask session and Supabase should call **`PATCH /users/me`** with `{"supabase_user_id":"<auth.users id>"}` (the Flutter app does this automatically when both sessions exist). When **`PUSH_DISPATCH_SECRET`** and **`SUPABASE_URL`** (or **`SUPABASE_FUNCTIONS_URL`**) are set, the server notifies other linked members after **new photos** and **new birthday reminders** by calling the Edge Function `send-fcm-push`.
+
 ## 3) API quick path (suggested order)
 
 1. `POST /auth/wechat-login` -> get `token`
-2. `POST /families` -> get `family_id` and `invite_code`
-3. `POST /families/join` -> another member joins
-4. `POST /daily-questions` and `POST /daily-answers`
-5. `POST /photos`, `POST /photos/{photo_id}/comments`, `POST /photos/{photo_id}/likes`
-6. `POST /birthday-reminders`
-7. `GET /families/{family_id}/daily-questions`
-8. `GET /families/{family_id}/photos`
+2. (Optional, dual cloud users) `PATCH /users/me` with `{"supabase_user_id":"<uuid>"}` so Flask can target FCM tokens — the Flutter app sends this when both sessions exist.
+3. `POST /families` -> get `family_id` and `invite_code`
+4. `POST /families/join` -> another member joins
+5. `POST /daily-questions` and `POST /daily-answers`
+6. `POST /photos`, `POST /photos/{photo_id}/comments`, `POST /photos/{photo_id}/likes`
+7. `POST /birthday-reminders`
+8. `GET /families/{family_id}/daily-questions`
+9. `GET /families/{family_id}/photos`
 
 ## 4) Production TODOs
 

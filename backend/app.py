@@ -1,12 +1,17 @@
+from __future__ import annotations
+
 import hashlib
 import hmac
 import os
 import secrets
 import sqlite3
 import string
+import threading
+import uuid
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+import fcm_dispatch
 import jwt
 import requests
 from dotenv import load_dotenv
@@ -159,6 +164,19 @@ def init_db():
         """
     )
     db.commit()
+    _migrate_schema(db)
+
+
+def _migrate_schema(db):
+    cols = [r[1] for r in db.execute("PRAGMA table_info(users)").fetchall()]
+    if "supabase_user_id" not in cols:
+        db.execute("ALTER TABLE users ADD COLUMN supabase_user_id TEXT")
+        db.commit()
+    db.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_supabase_user_id "
+        "ON users(supabase_user_id) WHERE supabase_user_id IS NOT NULL AND supabase_user_id != ''"
+    )
+    db.commit()
 
 
 def now_iso() -> str:
@@ -191,6 +209,52 @@ def user_in_family(user_id: int, family_id: int) -> bool:
         (family_id, user_id),
     ).fetchone()
     return row is not None
+
+
+def _normalize_supabase_uuid(raw) -> str | None:
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    try:
+        return str(uuid.UUID(s))
+    except (ValueError, AttributeError):
+        return None
+
+
+def family_member_supabase_uuids(db, family_id: int, exclude_user_id: int | None = None):
+    q = """
+        SELECT DISTINCT u.supabase_user_id
+        FROM family_members fm
+        JOIN users u ON u.id = fm.user_id
+        WHERE fm.family_id = ?
+          AND u.supabase_user_id IS NOT NULL
+          AND TRIM(u.supabase_user_id) != ''
+    """
+    params: list = [family_id]
+    if exclude_user_id is not None:
+        q += " AND fm.user_id != ?"
+        params.append(exclude_user_id)
+    rows = db.execute(q, params).fetchall()
+    return [r[0] for r in rows]
+
+
+def _user_display_name(db, user_id: int) -> str:
+    row = db.execute("SELECT display_name FROM users WHERE id = ?", (user_id,)).fetchone()
+    if row is None:
+        return "Someone"
+    return (row["display_name"] or "Someone").strip() or "Someone"
+
+
+def _schedule_family_fcm_notify(family_id: int, exclude_user_id: int, title: str, body: str, data: dict | None = None):
+    def work():
+        with app.app_context():
+            db = get_db()
+            uuids = family_member_supabase_uuids(db, family_id, exclude_user_id)
+            fcm_dispatch.dispatch_fcm_to_users(uuids, title, body, data)
+
+    threading.Thread(target=work, daemon=True).start()
 
 
 def make_invite_code(length: int = 8) -> str:
@@ -409,6 +473,66 @@ def wechat_login():
             ),
         }
     )
+
+
+@app.route("/users/me", methods=["GET"])
+def get_me():
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    db = get_db()
+    user = db.execute(
+        "SELECT id, display_name, supabase_user_id FROM users WHERE id = ?",
+        (caller_user_id,),
+    ).fetchone()
+    if user is None:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(
+        {
+            "user_id": user["id"],
+            "display_name": user["display_name"],
+            "supabase_user_id": user["supabase_user_id"],
+        }
+    )
+
+
+@app.route("/users/me", methods=["PATCH"])
+def patch_me():
+    caller_user_id, err = require_auth()
+    if err:
+        return err
+    payload = request.get_json(force=True)
+    if "supabase_user_id" not in payload:
+        return jsonify({"error": "no supported fields to update"}), 400
+
+    raw = payload.get("supabase_user_id")
+    db = get_db()
+
+    if raw is None or raw == "":
+        db.execute(
+            "UPDATE users SET supabase_user_id = NULL WHERE id = ?",
+            (caller_user_id,),
+        )
+        db.commit()
+        return jsonify({"user_id": caller_user_id, "supabase_user_id": None})
+
+    uid = _normalize_supabase_uuid(raw)
+    if not uid:
+        return jsonify({"error": "invalid supabase_user_id"}), 400
+
+    taken = db.execute(
+        "SELECT id FROM users WHERE supabase_user_id = ? AND id != ?",
+        (uid, caller_user_id),
+    ).fetchone()
+    if taken is not None:
+        return jsonify({"error": "supabase_user_id already linked to another account"}), 409
+
+    db.execute(
+        "UPDATE users SET supabase_user_id = ? WHERE id = ?",
+        (uid, caller_user_id),
+    )
+    db.commit()
+    return jsonify({"user_id": caller_user_id, "supabase_user_id": uid})
 
 
 @app.route("/families", methods=["POST"])
@@ -634,6 +758,14 @@ def create_photo():
     )
     db.commit()
     photo_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+    actor_name = _user_display_name(db, caller_user_id)
+    _schedule_family_fcm_notify(
+        int(payload["family_id"]),
+        caller_user_id,
+        "New family photo",
+        f"{actor_name} shared a photo.",
+        {"type": "local_photo", "family_id": str(payload["family_id"]), "photo_id": str(photo_id)},
+    )
     return jsonify({"id": photo_id, **payload})
 
 
@@ -674,6 +806,14 @@ def upload_photo():
     )
     db.commit()
     photo_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+    actor_name = _user_display_name(db, caller_user_id)
+    _schedule_family_fcm_notify(
+        family_id,
+        caller_user_id,
+        "New family photo",
+        f"{actor_name} shared a photo.",
+        {"type": "local_photo", "family_id": str(family_id), "photo_id": str(photo_id)},
+    )
     return jsonify(
         {
             "id": photo_id,
@@ -910,6 +1050,18 @@ def create_birthday_reminder():
     )
     db.commit()
     reminder_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+    actor_name = _user_display_name(db, caller_user_id)
+    _schedule_family_fcm_notify(
+        int(payload["family_id"]),
+        caller_user_id,
+        "Birthday reminder",
+        f"{actor_name} added a birthday to the family calendar.",
+        {
+            "type": "local_birthday_reminder",
+            "family_id": str(payload["family_id"]),
+            "reminder_id": str(reminder_id),
+        },
+    )
     return jsonify({"id": reminder_id, **payload})
 
 
