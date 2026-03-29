@@ -1,5 +1,7 @@
 import 'package:family_mobile/l10n/app_strings.dart';
+import 'package:family_mobile/theme/family_theme.dart';
 import 'package:family_mobile/widgets/cloud_empty_placeholder.dart';
+import 'package:family_mobile/screens/ledger_family_panel.dart';
 import 'package:family_mobile/screens/supabase_cloud_album_panel.dart';
 import 'package:family_mobile/screens/supabase_family_care_panel.dart';
 import 'package:family_mobile/supabase/cloud_daily_answer.dart';
@@ -34,9 +36,11 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
   List<CloudDailyQuestion> _questions = [];
   final Map<String, List<CloudDailyAnswer>> _answers = {};
   final Map<String, String> _answerImageSignedUrlByPath = {};
+  final Map<String, Uint8List> _answerImageDecryptedBytes = {};
   bool _loading = true;
   String? _error;
   bool _submitting = false;
+  int _detailTabIndex = 0;
 
   String _t(String key) => AppStrings.of(context).text(key);
 
@@ -78,12 +82,25 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
 
   Future<void> _loadAnswers(String questionId) async {
     try {
-      final list = await _dailyRepo.listAnswers(questionId);
+      final list = await _dailyRepo.listAnswers(widget.family.id, questionId);
       final paths = list.map((a) => a.imagePath).whereType<String>().where((p) => p.isNotEmpty);
       final signed = await _dailyRepo.signedAnswerImageUrls(paths);
+      final imgBytes = <String, Uint8List>{};
+      await Future.wait(
+        list.map((a) async {
+          if (a.answerImageEncryptionVersion >= 1 && !a.answerImageLocked && a.imagePath != null) {
+            final b = await _dailyRepo.loadDecryptedAnswerImageBytes(familyId: widget.family.id, answer: a);
+            if (b != null) imgBytes[a.id] = b;
+          }
+        }),
+      );
       if (!mounted) return;
       setState(() {
         _answers[questionId] = list;
+        for (final a in list) {
+          _answerImageDecryptedBytes.remove(a.id);
+        }
+        _answerImageDecryptedBytes.addAll(imgBytes);
         for (final e in signed.entries) {
           _answerImageSignedUrlByPath[e.key] = e.value;
         }
@@ -195,40 +212,120 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(widget.family.name),
-          bottom: TabBar(
-            tabs: [
-              Tab(text: _t('daily_questions')),
-              Tab(text: _t('photos_title')),
-              Tab(text: _t('care_tab_title')),
-            ],
-          ),
+    return Scaffold(
+      appBar: AppBar(
+        title: Row(
+          children: [
+            const Icon(Icons.favorite_rounded, size: 20, color: Color(0xFFCC6B5A)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                widget.family.name,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
-        body: Column(
+      ),
+      body: Container(
+        decoration: FamilyAppDecor.scaffoldGradient,
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: Text(
-                '${_t('invite_code')}: ${widget.family.inviteCode}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: const Color(0xFF6D5A51)),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Material(
+                color: FamilyAppColors.chipBg,
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.mail_outline_rounded, size: 18, color: Color(0xFF8E4B36)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${_t('invite_code')}: ${widget.family.inviteCode}',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: const Color(0xFF6D5A51),
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
             Expanded(
-              child: TabBarView(
+              child: IndexedStack(
+                index: _detailTabIndex,
                 children: [
-                  RefreshIndicator(
-                    onRefresh: _load,
-                    child: ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(16),
+                  SupabaseCloudAlbumPanel(familyId: widget.family.id),
+                  _buildCloudQuestionsTab(),
+                  SupabaseFamilyCarePanel(
+                    familyId: widget.family.id,
+                    onOpenPhotosTab: () => setState(() => _detailTabIndex = 0),
+                  ),
+                  LedgerFamilyPanel(familyId: widget.family.id),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _detailTabIndex,
+        onDestinationSelected: (i) => setState(() => _detailTabIndex = i),
+        destinations: [
+          NavigationDestination(
+            icon: const Icon(Icons.photo_library_outlined),
+            selectedIcon: const Icon(Icons.photo_library_rounded),
+            label: _t('photos_title'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.celebration_outlined),
+            selectedIcon: const Icon(Icons.celebration_rounded),
+            label: _t('nav_play'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.volunteer_activism_outlined),
+            selectedIcon: const Icon(Icons.volunteer_activism_rounded),
+            label: _t('care_tab_title'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.account_balance_wallet_outlined),
+            selectedIcon: const Icon(Icons.account_balance_wallet_rounded),
+            label: _t('ledger_tab_title'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCloudQuestionsTab() {
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(_t('daily_questions'), style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Card(
+            margin: EdgeInsets.zero,
+            child: Theme(
+              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                initiallyExpanded: false,
+                leading: const Icon(Icons.edit_note_rounded, color: Color(0xFFB45E48)),
+                title: Text(_t('cloud_expand_add_question')),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(_t('daily_questions'), style: Theme.of(context).textTheme.titleMedium),
-                        const SizedBox(height: 8),
                         TextField(
                           controller: _dateController,
                           decoration: InputDecoration(labelText: _t('question_date')),
@@ -244,37 +341,31 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
                           onPressed: _submitting ? null : _addQuestion,
                           child: Text(_t('add_question')),
                         ),
-                        if (_error != null) ...[
-                          const SizedBox(height: 8),
-                          Text(_error!, style: const TextStyle(color: Colors.red)),
-                        ],
-                        const SizedBox(height: 20),
-                        if (_loading)
-                          const Center(
-                              child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
-                        else if (_questions.isEmpty)
-                          CloudEmptyPlaceholder(
-                            icon: Icons.chat_bubble_outline_rounded,
-                            title: _t('no_questions'),
-                            subtitle: _t('cloud_empty_questions_hint'),
-                          )
-                        else
-                          ..._questions.map((q) => _buildQuestionCard(q)),
                       ],
-                    ),
-                  ),
-                  SupabaseCloudAlbumPanel(familyId: widget.family.id),
-                  Builder(
-                    builder: (ctx) => SupabaseFamilyCarePanel(
-                      familyId: widget.family.id,
-                      onOpenPhotosTab: () => DefaultTabController.of(ctx).animateTo(1),
                     ),
                   ),
                 ],
               ),
             ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 8),
+            Text(_error!, style: const TextStyle(color: Colors.red)),
           ],
-        ),
+          const SizedBox(height: 16),
+          if (_loading)
+            const Center(
+              child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()),
+            )
+          else if (_questions.isEmpty)
+            CloudEmptyPlaceholder(
+              icon: Icons.chat_bubble_outline_rounded,
+              title: _t('no_questions'),
+              subtitle: _t('cloud_empty_questions_hint'),
+            )
+          else
+            ..._questions.map((q) => _buildQuestionCard(q)),
+        ],
       ),
     );
   }
@@ -380,13 +471,36 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
   Widget _buildAnswerTile(CloudDailyAnswer a) {
     final path = a.imagePath;
     final url = path != null && path.isNotEmpty ? _answerImageSignedUrlByPath[path] : null;
-    final body = a.answerText.trim();
+    final decrypted = _answerImageDecryptedBytes[a.id];
+    final bodyPlain = a.answerText.trim();
+    final body = a.answerTextLocked ? _t('privacy_e2ee_locked_content') : bodyPlain;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (path != null && path.isNotEmpty && url != null)
+          if (path != null && path.isNotEmpty && a.answerImageLocked)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.lock_outline, size: 18, color: Theme.of(context).colorScheme.outline),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(_t('privacy_e2ee_locked_content'), style: Theme.of(context).textTheme.bodySmall)),
+                ],
+              ),
+            )
+          else if (path != null && path.isNotEmpty && decrypted != null)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.memory(
+                decrypted,
+                height: 160,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            )
+          else if (path != null && path.isNotEmpty && url != null)
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: Image.network(

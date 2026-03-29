@@ -1262,53 +1262,107 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildShortcutStrip(AppState appState) {
+  Widget _homeQuickTile({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white,
+      elevation: 0.35,
+      shadowColor: Colors.black26,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFEEE3),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: const Color(0xFFB45E48), size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, height: 1.2),
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: Colors.grey.shade400),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHomeQuickActions(AppState appState) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          _t('shortcuts_title'),
+          _t('home_quick_grid_title'),
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
         ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
+        const SizedBox(height: 12),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 2.05,
           children: [
-            ActionChip(
-              avatar: const Icon(Icons.photo_library_outlined, size: 18),
-              label: Text(_t('memories_album')),
-              onPressed: () => setState(() {
+            _homeQuickTile(
+              icon: Icons.auto_stories_rounded,
+              label: _t('memories_timeline'),
+              onTap: () => setState(() {
+                _shellIndex = 1;
+                _memoriesTabController.animateTo(0);
+              }),
+            ),
+            _homeQuickTile(
+              icon: Icons.photo_library_rounded,
+              label: _t('memories_album'),
+              onTap: () => setState(() {
                 _shellIndex = 1;
                 _memoriesTabController.animateTo(1);
               }),
             ),
-            ActionChip(
-              avatar: const Icon(Icons.calendar_month_outlined, size: 18),
-              label: Text(_t('nav_calendar')),
-              onPressed: () => setState(() => _shellIndex = 2),
+            _homeQuickTile(
+              icon: Icons.calendar_month_rounded,
+              label: _t('nav_calendar'),
+              onTap: () => setState(() => _shellIndex = 2),
             ),
-            ActionChip(
-              avatar: const Icon(Icons.quiz_outlined, size: 18),
-              label: Text(_t('questions')),
-              onPressed: () => setState(() => _shellIndex = 4),
+            _homeQuickTile(
+              icon: Icons.task_alt_rounded,
+              label: _t('nav_tasks'),
+              onTap: () => setState(() => _shellIndex = 3),
             ),
-            ActionChip(
-              avatar: const Icon(Icons.volunteer_activism_outlined, size: 18),
-              label: Text(_t('care_open_sheet')),
-              onPressed: () => _openCareHub(appState),
+            _homeQuickTile(
+              icon: Icons.quiz_rounded,
+              label: _t('nav_play'),
+              onTap: () => setState(() => _shellIndex = 4),
             ),
-            ActionChip(
-              avatar: const Icon(Icons.task_alt_outlined, size: 18),
-              label: Text(_t('nav_tasks')),
-              onPressed: () => setState(() => _shellIndex = 3),
+            _homeQuickTile(
+              icon: Icons.volunteer_activism_rounded,
+              label: _t('care_open_sheet'),
+              onTap: () => _openCareHub(appState),
             ),
-            ActionChip(
-              avatar: const Icon(Icons.mail_outline, size: 18),
-              label: Text(_t('brief_shortcut_chip')),
-              onPressed: _openComposeBrief,
+            _homeQuickTile(
+              icon: Icons.mail_outline_rounded,
+              label: _t('brief_shortcut_chip'),
+              onTap: _openComposeBrief,
             ),
           ],
         ),
@@ -1372,10 +1426,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   List<Widget> _overviewContentWidgets(AppState appState) {
-    final latestQuestions = [...appState.dailyQuestions]..sort((a, b) => b.id.compareTo(a.id));
-    final latestPhotos = [...appState.photos]..sort((a, b) => b.id.compareTo(a.id));
-    final latestReminders = [...appState.birthdayReminders]..sort((a, b) => b.id.compareTo(a.id));
-
     return [
       Container(
         padding: const EdgeInsets.all(16),
@@ -1422,18 +1472,19 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ],
       Card(
         margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            initiallyExpanded: false,
+            leading: const Icon(Icons.badge_outlined, color: Color(0xFFB45E48)),
+            title: Text(_t('family_role_section_title')),
+            subtitle: Text(
+              _t('family_role_picker_hint'),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             children: [
-              ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                title: Text(_t('family_role_section_title')),
-                subtitle: Text(_t('family_role_picker_hint')),
-              ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                 child: Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -1464,23 +1515,29 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
       const SizedBox(height: 10),
       ..._pendingBriefSectionWidgets(appState),
-      Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        children: [
-          _buildStatCard(_t('questions'), appState.dailyQuestions.length.toString(), Icons.quiz_outlined),
-          _buildStatCard(_t('photos'), appState.photos.length.toString(), Icons.photo_library_outlined),
-          _buildStatCard(_t('birthdays'), appState.birthdayReminders.length.toString(), Icons.cake_outlined),
-          _buildStatCard(_t('nav_tasks'), appState.familyTasks.length.toString(), Icons.task_alt_outlined),
-        ],
+      SizedBox(
+        height: 100,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          children: [
+            _buildStatCard(_t('questions'), appState.dailyQuestions.length.toString(), Icons.quiz_outlined),
+            const SizedBox(width: 10),
+            _buildStatCard(_t('photos'), appState.photos.length.toString(), Icons.photo_library_outlined),
+            const SizedBox(width: 10),
+            _buildStatCard(_t('birthdays'), appState.birthdayReminders.length.toString(), Icons.cake_outlined),
+            const SizedBox(width: 10),
+            _buildStatCard(_t('nav_tasks'), appState.familyTasks.length.toString(), Icons.task_alt_outlined),
+          ],
+        ),
       ),
       const SizedBox(height: 20),
       _sectionTitle(_t('recent_activity'), Icons.timeline),
       const SizedBox(height: 8),
       if (appState.activities.isEmpty)
         _warmEmptyCard(_t('no_activity'), Icons.timelapse_outlined)
-      else
-        ...appState.activities.take(8).map(
+      else ...[
+        ...appState.activities.take(6).map(
               (a) => ListTile(
                 onTap: () => _focusActivity(appState, a),
                 contentPadding: EdgeInsets.zero,
@@ -1502,50 +1559,19 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 isThreeLine: true,
               ),
             ),
-      const SizedBox(height: 20),
-      _sectionTitle(_t('latest_questions'), Icons.quiz_outlined),
-      const SizedBox(height: 8),
-      if (latestQuestions.isEmpty)
-        _warmEmptyCard(_t('no_questions'), Icons.help_outline)
-      else
-        ...latestQuestions.take(3).map(
-              (q) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.quiz_outlined),
-                title: Text(q.questionText),
-                subtitle: Text(q.questionDate),
-              ),
+        if (appState.activities.length > 6)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => setState(() {
+                _shellIndex = 1;
+                _memoriesTabController.animateTo(0);
+              }),
+              icon: const Icon(Icons.auto_stories_outlined, size: 18),
+              label: Text(_t('home_see_all_activity')),
             ),
-      const SizedBox(height: 16),
-      _sectionTitle(_t('latest_photos'), Icons.photo_outlined),
-      const SizedBox(height: 8),
-      if (latestPhotos.isEmpty)
-        _warmEmptyCard(_t('no_photos'), Icons.photo_size_select_actual_outlined)
-      else
-        ...latestPhotos.take(3).map(
-              (p) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.photo_outlined),
-                title: Text(p.caption.isEmpty ? '${_t('photos')} #${p.id}' : p.caption),
-                subtitle: Text('${_t('likes_count')} ${p.likeCount} · ${_t('comments_count')} ${p.commentCount}'),
-              ),
-            ),
-      const SizedBox(height: 16),
-      _sectionTitle(_t('latest_reminders'), Icons.cake_outlined),
-      const SizedBox(height: 8),
-      if (latestReminders.isEmpty)
-        _warmEmptyCard(_t('no_reminders'), Icons.event_busy_outlined)
-      else
-        ...latestReminders.take(3).map(
-              (r) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.cake_outlined),
-                title: Text(r.birthday),
-                subtitle: Text(
-                  '${_t('notify_days_before')}: ${r.notifyDaysBefore} · ${r.enabled ? _t('enabled') : _t('disabled')}',
-                ),
-              ),
-            ),
+          ),
+      ],
     ];
   }
 
@@ -1662,7 +1688,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
               children: [
-                _buildShortcutStrip(appState),
+                _buildHomeQuickActions(appState),
                 const SizedBox(height: 16),
                 ..._overviewContentWidgets(appState),
               ],
@@ -1766,22 +1792,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: Card(
-            color: const Color(0xFFFFF4EC),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Text(
-                _t('tasks_intro_short'),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFF6D5A51),
-                      height: 1.35,
-                    ),
-              ),
-            ),
-          ),
-        ),
-        Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
           child: Wrap(
             spacing: 8,
@@ -1806,41 +1816,58 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: TextField(
-            controller: _taskTitleController,
-            decoration: InputDecoration(labelText: _t('task_title_label')),
-            textInputAction: TextInputAction.next,
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Card(
+            margin: EdgeInsets.zero,
+            child: Theme(
+              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                initiallyExpanded: false,
+                leading: const Icon(Icons.add_task_rounded, color: Color(0xFFB45E48)),
+                title: Text(_t('tasks_expand_add')),
+                subtitle: Text(
+                  _t('tasks_intro_short'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TextField(
+                          controller: _taskTitleController,
+                          decoration: InputDecoration(labelText: _t('task_title_label')),
+                          textInputAction: TextInputAction.next,
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _taskAssigneeController,
+                          decoration: InputDecoration(labelText: _t('task_assignee_hint')),
+                          textInputAction: TextInputAction.next,
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _taskDueController,
+                          decoration: InputDecoration(labelText: _t('task_due_hint')),
+                          onSubmitted: (_) => _submitFamilyTask(appState),
+                        ),
+                        const SizedBox(height: 10),
+                        FilledButton.icon(
+                          onPressed: appState.isBusy ? null : () => _submitFamilyTask(appState),
+                          icon: const Icon(Icons.add_task_rounded),
+                          label: Text(_t('add_family_task')),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: TextField(
-            controller: _taskAssigneeController,
-            decoration: InputDecoration(labelText: _t('task_assignee_hint')),
-            textInputAction: TextInputAction.next,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: TextField(
-            controller: _taskDueController,
-            decoration: InputDecoration(labelText: _t('task_due_hint')),
-            onSubmitted: (_) => _submitFamilyTask(appState),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: FilledButton.icon(
-            onPressed: appState.isBusy ? null : () => _submitFamilyTask(appState),
-            icon: const Icon(Icons.add_task_rounded),
-            label: Text(_t('add_family_task')),
-          ),
-        ),
-        const SizedBox(height: 8),
         Expanded(
           child: filtered.isEmpty
               ? Center(
