@@ -246,6 +246,9 @@ class AppStrings {
       'tab_cloud_families': 'Cloud',
       'dual_nav_home': 'My home',
       'dual_nav_cloud': 'Cloud',
+      'cloud_detail_section_picker': 'Sections',
+      'cloud_brief_flask_only':
+          'Family check-in (child update & parent replies) is under My home with a local/Flask session. Cloud-only: open My home in dual mode, or use dev local login.',
       'nav_home': 'Home',
       'nav_memories': 'Memories',
       'nav_calendar': 'Calendar',
@@ -710,6 +713,9 @@ class AppStrings {
       'tab_cloud_families': '云端',
       'dual_nav_home': '我的家',
       'dual_nav_cloud': '云端同步',
+      'cloud_detail_section_picker': '功能分区',
+      'cloud_brief_flask_only':
+          '家庭简报（子女近况与父母回复）在「我的家」，需本地 Flask 已登录。若仅云端登录：双模式时切到底部「我的家」，或用开发者本地登录。',
       'nav_home': '首页',
       'nav_memories': '回忆',
       'nav_calendar': '日历',
@@ -1166,6 +1172,9 @@ class AppStrings {
       'tab_cloud_families': '클라우드',
       'dual_nav_home': '우리 집',
       'dual_nav_cloud': '클라우드',
+      'cloud_detail_section_picker': '메뉴',
+      'cloud_brief_flask_only':
+          '가족 안부(자녀 안전·부모 답장)는 로컬/Flask 로그인이 있는 「우리 집」에 있습니다. 클라우드만 쓰면 이중 모드에서 「우리 집」으로 전환하거나 개발자 로컬 로그인을 쓰세요.',
       'nav_home': '홈',
       'nav_memories': '추억',
       'nav_calendar': '캘린더',

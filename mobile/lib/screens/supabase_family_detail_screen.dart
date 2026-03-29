@@ -1,4 +1,5 @@
 import 'package:family_mobile/l10n/app_strings.dart';
+import 'package:family_mobile/state/app_state.dart';
 import 'package:family_mobile/theme/family_theme.dart';
 import 'package:family_mobile/widgets/cloud_empty_placeholder.dart';
 import 'package:family_mobile/screens/ledger_family_panel.dart';
@@ -13,6 +14,7 @@ import 'package:family_mobile/util/date_time_display.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 
@@ -43,6 +45,16 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
   int _detailTabIndex = 0;
 
   String _t(String key) => AppStrings.of(context).text(key);
+
+  Widget _sectionQuickChip(int index, String label, IconData icon) {
+    final selected = _detailTabIndex == index;
+    return FilterChip(
+      avatar: Icon(icon, size: 18, color: selected ? const Color(0xFF8E4B36) : null),
+      selected: selected,
+      label: Text(label),
+      onSelected: (_) => setState(() => _detailTabIndex = index),
+    );
+  }
 
   @override
   void initState() {
@@ -255,6 +267,51 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
                     ],
                   ),
                 ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _t('cloud_detail_section_picker'),
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF5C4A42),
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _sectionQuickChip(0, _t('photos_title'), Icons.photo_library_outlined),
+                        const SizedBox(width: 8),
+                        _sectionQuickChip(1, _t('nav_play'), Icons.celebration_outlined),
+                        const SizedBox(width: 8),
+                        _sectionQuickChip(2, _t('care_tab_title'), Icons.volunteer_activism_outlined),
+                        const SizedBox(width: 8),
+                        _sectionQuickChip(3, _t('ledger_tab_title'), Icons.account_balance_wallet_outlined),
+                      ],
+                    ),
+                  ),
+                  Consumer<AppState>(
+                    builder: (context, appState, _) {
+                      if (appState.hasFlaskSession) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Text(
+                          _t('cloud_brief_flask_only'),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: const Color(0xFF6D5A51),
+                                height: 1.35,
+                              ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
             Expanded(
