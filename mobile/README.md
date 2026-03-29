@@ -36,7 +36,7 @@ If testing on a real phone, change it to your computer LAN IP, e.g.:
 
 - **Local (Flask) home**: `HomeScreen` — families, daily Q&A, photos (upload, comments, likes), birthday reminders, voice notes, etc.
 - **Cloud (Supabase)**: `SupabaseFamilyScreen` / detail — invite codes, care panel, cloud album, companion room, medical card sync, cloud birthdays, etc.
-- **Dual session**: when signed in to both backends, `DualSessionShell` uses a bottom nav (local home + cloud families). The app registers your Supabase user id on the Flask profile (`PATCH /users/me`) so the Python backend can fan out FCM to other members after local photos or birthday reminders when push env is configured.
+- **Dual session**: when signed in to both backends, `DualSessionShell` uses a bottom nav (local home + cloud families). The app registers your Supabase user id on the Flask profile (`PATCH /users/me`) so the Python backend can fan out FCM to other members after local photos, likes, comments, daily answers, or birthday reminders when push env is configured.
 - **Still rough / prod**: mock WeChat code path for some flows; real WeChat SDK + Firebase (`flutterfire configure`) for production push — see §6.
 
 ## 5) If Android build times out on network

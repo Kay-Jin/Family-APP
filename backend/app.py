@@ -247,6 +247,18 @@ def _user_display_name(db, user_id: int) -> str:
     return (row["display_name"] or "Someone").strip() or "Someone"
 
 
+def _notification_snippet(text: str | None, max_len: int = 100) -> str:
+    """Single-line preview for push copy (avoids newlines / runaway length)."""
+    if text is None:
+        return ""
+    t = " ".join(str(text).split()).strip()
+    if not t:
+        return ""
+    if len(t) <= max_len:
+        return t
+    return t[: max_len - 1].rstrip() + "…"
+
+
 def _schedule_family_fcm_notify(family_id: int, exclude_user_id: int, title: str, body: str, data: dict | None = None):
     def work():
         with app.app_context():
@@ -692,7 +704,10 @@ def create_daily_answer():
     payload = request.get_json(force=True)
     payload["user_id"] = caller_user_id
     db = get_db()
-    question = db.execute("SELECT family_id FROM daily_questions WHERE id = ?", (payload["question_id"],)).fetchone()
+    question = db.execute(
+        "SELECT family_id, question_text FROM daily_questions WHERE id = ?",
+        (payload["question_id"],),
+    ).fetchone()
     if question is None:
         return jsonify({"error": "question not found"}), 404
     if not user_in_family(caller_user_id, question["family_id"]):
@@ -706,6 +721,27 @@ def create_daily_answer():
     )
     db.commit()
     answer_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+    family_id = int(question["family_id"])
+    actor_name = _user_display_name(db, caller_user_id)
+    q_snip = _notification_snippet(question["question_text"], 90)
+    if q_snip:
+        ans_body = (
+            f'{actor_name} submitted a new reply to the family\'s daily question — "{q_snip}"'
+        )
+    else:
+        ans_body = f"{actor_name} submitted a new reply to the family's daily question."
+    _schedule_family_fcm_notify(
+        family_id,
+        caller_user_id,
+        "Daily question — new response",
+        ans_body,
+        {
+            "type": "local_daily_answer",
+            "family_id": str(family_id),
+            "question_id": str(payload["question_id"]),
+            "answer_id": str(answer_id),
+        },
+    )
     return jsonify({"id": answer_id, **payload})
 
 
@@ -762,8 +798,8 @@ def create_photo():
     _schedule_family_fcm_notify(
         int(payload["family_id"]),
         caller_user_id,
-        "New family photo",
-        f"{actor_name} shared a photo.",
+        "Family album — new photo",
+        f"{actor_name} added a new photo to the shared family album.",
         {"type": "local_photo", "family_id": str(payload["family_id"]), "photo_id": str(photo_id)},
     )
     return jsonify({"id": photo_id, **payload})
@@ -810,8 +846,8 @@ def upload_photo():
     _schedule_family_fcm_notify(
         family_id,
         caller_user_id,
-        "New family photo",
-        f"{actor_name} shared a photo.",
+        "Family album — new photo",
+        f"{actor_name} added a new photo to the shared family album.",
         {"type": "local_photo", "family_id": str(family_id), "photo_id": str(photo_id)},
     )
     return jsonify(
@@ -893,6 +929,25 @@ def comment_photo(photo_id: int):
     )
     db.commit()
     comment_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+    family_id = int(photo["family_id"])
+    actor_name = _user_display_name(db, caller_user_id)
+    c_snip = _notification_snippet(payload.get("content"), 85)
+    if c_snip:
+        c_body = f'{actor_name} commented on a shared family photo — "{c_snip}"'
+    else:
+        c_body = f"{actor_name} left a new comment on a shared family photo."
+    _schedule_family_fcm_notify(
+        family_id,
+        caller_user_id,
+        "Family album — new comment",
+        c_body,
+        {
+            "type": "local_photo_comment",
+            "family_id": str(family_id),
+            "photo_id": str(photo_id),
+            "comment_id": str(comment_id),
+        },
+    )
     return jsonify({"id": comment_id, "photo_id": photo_id, **payload})
 
 
@@ -1004,6 +1059,15 @@ def like_photo(photo_id: int):
         db.commit()
     except sqlite3.IntegrityError:
         return jsonify({"message": "already liked"})
+    family_id = int(photo["family_id"])
+    actor_name = _user_display_name(db, caller_user_id)
+    _schedule_family_fcm_notify(
+        family_id,
+        caller_user_id,
+        "Family album — new like",
+        f"{actor_name} liked a photo in your shared family album.",
+        {"type": "local_photo_like", "family_id": str(family_id), "photo_id": str(photo_id)},
+    )
     return jsonify({"message": "liked"})
 
 
@@ -1054,8 +1118,8 @@ def create_birthday_reminder():
     _schedule_family_fcm_notify(
         int(payload["family_id"]),
         caller_user_id,
-        "Birthday reminder",
-        f"{actor_name} added a birthday to the family calendar.",
+        "Shared calendar — birthday reminder",
+        f"{actor_name} added a birthday reminder to the family's shared calendar.",
         {
             "type": "local_birthday_reminder",
             "family_id": str(payload["family_id"]),

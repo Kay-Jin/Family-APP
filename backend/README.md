@@ -41,7 +41,7 @@ Set **`JWT_SECRET`** in production (see `.env.example`). Default `dev-secret-cha
 
 ### Push (local family → FCM via Supabase)
 
-Members who use **both** the Flask session and Supabase should call **`PATCH /users/me`** with `{"supabase_user_id":"<auth.users id>"}` (the Flutter app does this automatically when both sessions exist). When **`PUSH_DISPATCH_SECRET`** and **`SUPABASE_URL`** (or **`SUPABASE_FUNCTIONS_URL`**) are set, the server notifies other linked members after **new photos** and **new birthday reminders** by calling the Edge Function `send-fcm-push`.
+Members who use **both** the Flask session and Supabase should call **`PATCH /users/me`** with `{"supabase_user_id":"<auth.users id>"}` (the Flutter app does this automatically when both sessions exist). When **`PUSH_DISPATCH_SECRET`** and **`SUPABASE_URL`** (or **`SUPABASE_FUNCTIONS_URL`**) are set, the server notifies other linked members (excluding the actor) after **new photos**, **photo likes**, **photo comments**, **daily question answers**, and **new birthday reminders** via the Edge Function `send-fcm-push`.
 
 ## 3) API quick path (suggested order)
 
