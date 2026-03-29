@@ -300,7 +300,20 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
                 if (answers.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text(_t('no_answers'), style: Theme.of(context).textTheme.bodySmall),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_t('no_answers'), style: Theme.of(context).textTheme.bodySmall),
+                        const SizedBox(height: 6),
+                        Text(
+                          _t('cloud_empty_answers_hint'),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: const Color(0xFF6D5A51),
+                                height: 1.35,
+                              ),
+                        ),
+                      ],
+                    ),
                   )
                 else
                   ...answers.map((a) => _buildAnswerTile(a)),

@@ -158,6 +158,30 @@ class _LoginScreenState extends State<LoginScreen> {
                             label: Text(t.text('auth_sign_up')),
                           ),
                         ),
+                        const SizedBox(height: 14),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Icon(
+                                Icons.cloud_outlined,
+                                size: 18,
+                                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                t.text('login_cloud_hint'),
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: const Color(0xFF6D5A51),
+                                      height: 1.35,
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 16),
                         Text(
                           t.text('wechat_need_backend'),
