@@ -20,6 +20,13 @@ flutter pub get
 flutter run
 ```
 
+### Windows 电脑 + iPhone 手机，怎么配合？
+
+- **在 Windows 上可以**：改 Flutter/Dart 代码、跑 **`flutter run` 到 Android 模拟器或安卓真机**、在本机跑 **Flask 后端**、用 **局域网 IP** 给手机上的 App 填接口地址（与「全家用 iPhone」不冲突——只是开发机是 Windows）。
+- **装到 iPhone / 打 iOS 包**：苹果要求必须用 **macOS + Xcode** 编译和签名。Windows 上**不能**官方地完成 `flutter build ipa` 或把调试版装到 iPhone（没有 Xcode）。
+- **常见做法**：（1）日常在 Windows 上用 Android 先把功能调通；（2）需要上 iPhone 时，用一台 **Mac**（自己的、借的、或 **云 Mac / CI**，例如带 macOS 的 GitHub Actions、Codemagic 等）拉代码执行 **`flutter build ios`** 或在 Xcode 里 **Run 到真机**。
+- **后端**：Flask 继续在 Windows 上 `0.0.0.0` 监听即可；iPhone 与电脑同一 Wi‑Fi，App 里填 `http://你电脑的局域网IP:8000`（不要用 `127.0.0.1`）。
+
 ## 3) API base URL (Flask)
 
 The app resolves the backend in this order:
