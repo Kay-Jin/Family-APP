@@ -13,7 +13,10 @@
 
 WITH
   exp_tables AS (
-    SELECT unnest(ARRAY['families', 'family_members', 'daily_questions', 'daily_answers', 'family_photos']) AS t
+    SELECT unnest(ARRAY[
+      'families', 'family_members', 'daily_questions', 'daily_answers', 'family_photos',
+      'family_photo_likes', 'family_photo_comments'
+    ]) AS t
   ),
   missing_tables AS (
     SELECT
@@ -35,7 +38,10 @@ WITH
     JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'public'
       AND c.relkind = 'r'
-      AND c.relname IN ('families', 'family_members', 'daily_questions', 'daily_answers', 'family_photos')
+      AND c.relname IN (
+        'families', 'family_members', 'daily_questions', 'daily_answers', 'family_photos',
+        'family_photo_likes', 'family_photo_comments'
+      )
       AND c.relrowsecurity IS NOT TRUE
   ),
   missing_columns AS (
@@ -46,7 +52,9 @@ WITH
         ('family_members', ARRAY['family_id', 'user_id', 'role', 'created_at']),
         ('daily_questions', ARRAY['id', 'family_id', 'question_date', 'question_text', 'created_at']),
         ('daily_answers', ARRAY['id', 'question_id', 'user_id', 'author_display_name', 'answer_text', 'image_path', 'created_at']),
-        ('family_photos', ARRAY['id', 'family_id', 'user_id', 'caption', 'image_path', 'uploader_display_name', 'created_at'])
+        ('family_photos', ARRAY['id', 'family_id', 'user_id', 'caption', 'image_path', 'uploader_display_name', 'created_at']),
+        ('family_photo_likes', ARRAY['photo_id', 'user_id', 'created_at']),
+        ('family_photo_comments', ARRAY['id', 'photo_id', 'user_id', 'body', 'author_display_name', 'created_at'])
     ) AS spec(tbl, cols)
     CROSS JOIN LATERAL unnest(spec.cols) AS c(col)
     WHERE NOT EXISTS (
@@ -71,6 +79,7 @@ WITH
       ('join_family_by_code'),
       ('is_member_of_family'),
       ('is_question_in_my_family'),
+      ('is_photo_in_my_family'),
       ('_trg_families_add_creator_as_owner')
     ) AS f(fn)
     WHERE NOT EXISTS (

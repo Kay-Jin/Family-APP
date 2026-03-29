@@ -38,6 +38,9 @@ String apiErrorMessage(Object error, String Function(String key) tr) {
   if (lower.contains('answer_text_or_image_required')) {
     return tr('answer_text_or_image_required');
   }
+  if (lower.contains('album_comment_required')) {
+    return tr('album_comment_required');
+  }
   if (lower.contains('wechat_not_configured')) {
     return tr('error_wechat_not_configured');
   }

@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:family_mobile/supabase/cloud_album_comment.dart';
 import 'package:family_mobile/supabase/cloud_album_photo.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -63,20 +64,86 @@ class AlbumRepository {
           ),
         );
 
-    final metaName = user.userMetadata?['name'] ?? user.userMetadata?['full_name'];
-    final name = metaName is String && metaName.isNotEmpty
-        ? metaName
-        : (user.email != null && user.email!.isNotEmpty ? user.email!.split('@').first : 'Member');
-
     final row = await _client.from('family_photos').insert({
       'family_id': familyId,
       'user_id': user.id,
       'caption': caption.trim(),
       'image_path': path,
-      'uploader_display_name': name,
+      'uploader_display_name': _displayNameFor(user),
     }).select().single();
 
     return CloudAlbumPhoto.fromJson(Map<String, dynamic>.from(row as Map));
+  }
+
+  String _displayNameFor(User user) {
+    final metaName = user.userMetadata?['name'] ?? user.userMetadata?['full_name'];
+    if (metaName is String && metaName.isNotEmpty) return metaName;
+    if (user.email != null && user.email!.isNotEmpty) return user.email!.split('@').first;
+    return 'Member';
+  }
+
+  /// Like count and whether the current user liked this photo (one `select` on `family_photo_likes`).
+  Future<({int count, bool likedByMe})> getLikeState(String photoId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return (count: 0, likedByMe: false);
+    final rows = await _client.from('family_photo_likes').select('user_id').eq('photo_id', photoId);
+    final list = rows as List<dynamic>;
+    var liked = false;
+    for (final r in list) {
+      final m = Map<String, dynamic>.from(r as Map);
+      if (m['user_id'].toString() == user.id) liked = true;
+    }
+    return (count: list.length, likedByMe: liked);
+  }
+
+  Future<void> likePhoto(String photoId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw Exception('Not signed in');
+    try {
+      await _client.from('family_photo_likes').insert({
+        'photo_id': photoId,
+        'user_id': user.id,
+      });
+    } catch (e) {
+      final s = e.toString().toLowerCase();
+      if (s.contains('23505') || s.contains('duplicate') || s.contains('unique')) return;
+      rethrow;
+    }
+  }
+
+  Future<void> unlikePhoto(String photoId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw Exception('Not signed in');
+    await _client.from('family_photo_likes').delete().eq('photo_id', photoId).eq('user_id', user.id);
+  }
+
+  Future<List<CloudAlbumComment>> listComments(String photoId) async {
+    final rows = await _client
+        .from('family_photo_comments')
+        .select()
+        .eq('photo_id', photoId)
+        .order('created_at', ascending: true);
+    return (rows as List<dynamic>)
+        .map((e) => CloudAlbumComment.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  Future<CloudAlbumComment> addComment(String photoId, String body) async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw Exception('Not signed in');
+    final trimmed = body.trim();
+    if (trimmed.isEmpty) throw Exception('album_comment_required');
+    final row = await _client.from('family_photo_comments').insert({
+      'photo_id': photoId,
+      'user_id': user.id,
+      'body': trimmed,
+      'author_display_name': _displayNameFor(user),
+    }).select().single();
+    return CloudAlbumComment.fromJson(Map<String, dynamic>.from(row as Map));
+  }
+
+  Future<void> deleteComment(String commentId) async {
+    await _client.from('family_photo_comments').delete().eq('id', commentId);
   }
 
   Future<CloudAlbumPhoto> updateCaption({
