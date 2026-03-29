@@ -57,6 +57,7 @@ CI（Continuous Integration）会在你**推送代码**或**发起 Pull Request*
 - [`supabase/migrations/20260401_family_album_private_bucket.sql`](../supabase/migrations/20260401_family_album_private_bucket.sql)（`family_album_images` 改为私有桶；客户端用签名 URL）
 - [`supabase/migrations/20260402_answer_images_private_bucket.sql`](../supabase/migrations/20260402_answer_images_private_bucket.sql)（`family_answer_images` 改为私有桶；每日回答配图签名 URL）
 - [`supabase/migrations/20260403_device_push_tokens.sql`](../supabase/migrations/20260403_device_push_tokens.sql)（`device_push_tokens`：后续 FCM/APNs 注册占位）
+- [`supabase/migrations/20260404_family_care_suite.sql`](../supabase/migrations/20260404_family_care_suite.sql)（关怀：一键状态、云语音信箱、医疗卡、生日提醒、关怀偏好与可选露面、`family_voice_messages` 存储桶）
 
 执行后再跑一次检查，直到 `failed_count = 0`。完整基线仍以 [`supabase/schema.sql`](../supabase/schema.sql) 为准。
 

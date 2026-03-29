@@ -64,6 +64,9 @@ class _SupabaseFamilyCarePanelState extends State<SupabaseFamilyCarePanel> {
   bool _preferWarmUi = true;
   bool _largeText = false;
 
+  /// Avoid overwriting the medical form on every pull-to-refresh after the first cloud snapshot.
+  bool _medicalFormSyncedFromCloud = false;
+
   bool _recording = false;
   DateTime? _recordStarted;
   String? _pendingVoicePath;
@@ -81,6 +84,16 @@ class _SupabaseFamilyCarePanelState extends State<SupabaseFamilyCarePanel> {
     return s;
   }
 
+  String _presenceLabelForUserId(String userId) {
+    for (final c in _allMedical) {
+      if (c.userId == userId) {
+        final n = c.displayName?.trim();
+        if (n != null && n.isNotEmpty) return n;
+      }
+    }
+    return userId.length > 8 ? '${userId.substring(0, 8)}…' : userId;
+  }
+
   List<Widget> _buildPresenceRows(TextStyle scaled) {
     final uid = Supabase.instance.client.auth.currentUser?.id;
     final rows = _presence.entries.where((e) => e.key != uid).toList();
@@ -92,7 +105,7 @@ class _SupabaseFamilyCarePanelState extends State<SupabaseFamilyCarePanel> {
           (e) => Padding(
             padding: const EdgeInsets.only(bottom: 4),
             child: Text(
-              '${e.key.substring(0, 8)}… · ${formatIsoDateTimeLocal(context, e.value.toIso8601String())}',
+              '${_presenceLabelForUserId(e.key)} · ${formatIsoDateTimeLocal(context, e.value.toIso8601String())}',
               style: scaled.copyWith(fontSize: (scaled.fontSize ?? 14) * 0.9),
             ),
           ),
@@ -208,14 +221,17 @@ class _SupabaseFamilyCarePanelState extends State<SupabaseFamilyCarePanel> {
         _gentleRadar = prefs.gentleRadar;
         _sharePresence = prefs.sharePresence;
         _presence = presence;
-        if (mine != null) {
-          _mdName.text = mine.displayName ?? '';
-          _mdAllergies.text = mine.allergies ?? '';
-          _mdMeds.text = mine.medications ?? '';
-          _mdHospitals.text = mine.hospitals ?? '';
-          _mdEmergName.text = mine.emergencyContactName ?? '';
-          _mdEmergPhone.text = mine.emergencyContactPhone ?? '';
-          _mdAccompany.text = mine.accompanimentNote ?? '';
+        if (!_medicalFormSyncedFromCloud) {
+          if (mine != null) {
+            _mdName.text = mine.displayName ?? '';
+            _mdAllergies.text = mine.allergies ?? '';
+            _mdMeds.text = mine.medications ?? '';
+            _mdHospitals.text = mine.hospitals ?? '';
+            _mdEmergName.text = mine.emergencyContactName ?? '';
+            _mdEmergPhone.text = mine.emergencyContactPhone ?? '';
+            _mdAccompany.text = mine.accompanimentNote ?? '';
+          }
+          _medicalFormSyncedFromCloud = true;
         }
       });
     } catch (e) {
