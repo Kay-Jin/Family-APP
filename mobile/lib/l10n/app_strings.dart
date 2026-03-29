@@ -30,7 +30,12 @@ class AppStrings {
       'welcome_subtitle': 'Build warm moments with your family every day.',
       'login_cloud_title': 'Cloud sign-in',
       'login_cloud_subtitle':
-          'Family data is stored on Supabase. Sign in with email or WeChat — same account on every iPhone.',
+          'Family data is stored on Supabase. Sign in with email — same account on every iPhone.',
+      'family_quick_login_title': 'Family quick sign-in',
+      'family_quick_login_hint':
+          'Uses Supabase emails {baba} and {mama}. Create both users in the Supabase Dashboard (with Email confirmed), or sign up once per address below.',
+      'family_quick_baba': 'Dad',
+      'family_quick_mama': 'Mom',
       'auth_email': 'Email',
       'auth_password': 'Password',
       'auth_sign_in': 'Sign in',
@@ -479,7 +484,12 @@ class AppStrings {
       'welcome_home': '欢迎回家',
       'welcome_subtitle': '每天和家人一起创造温暖时刻。',
       'login_cloud_title': '登录（云端）',
-      'login_cloud_subtitle': '家庭数据保存在 Supabase 服务器，换手机登录同一账号即可同步。支持邮箱与微信。',
+      'login_cloud_subtitle': '家庭数据保存在 Supabase 服务器，换手机登录同一账号即可同步。',
+      'family_quick_login_title': '家庭一键登录',
+      'family_quick_login_hint':
+          '对应邮箱为 {baba} 与 {mama}。请在 Supabase 控制台创建用户并勾选邮箱已确认，或让家人各用「注册」各建一次。',
+      'family_quick_baba': '爸爸',
+      'family_quick_mama': '妈妈',
       'auth_email': '邮箱',
       'auth_password': '密码',
       'auth_sign_in': '登录',
@@ -914,8 +924,12 @@ class AppStrings {
       'welcome_home': '환영합니다',
       'welcome_subtitle': '가족과 함께 따뜻한 순간을 매일 쌓아가요.',
       'login_cloud_title': '클라우드 로그인',
-      'login_cloud_subtitle':
-          '가족 데이터는 Supabase에 저장됩니다. 이메일 또는 위챗으로 로그인하면 기기 간 동기화됩니다.',
+      'login_cloud_subtitle': '가족 데이터는 Supabase에 저장됩니다. 이메일로 로그인하면 기기 간 동기화됩니다.',
+      'family_quick_login_title': '가족 빠른 로그인',
+      'family_quick_login_hint':
+          'Supabase 이메일: {baba}, {mama}. 대시보드에서 사용자를 만들거나 아래에서 각각 가입하세요.',
+      'family_quick_baba': '아빠',
+      'family_quick_mama': '엄마',
       'auth_email': '이메일',
       'auth_password': '비밀번호',
       'auth_sign_in': '로그인',

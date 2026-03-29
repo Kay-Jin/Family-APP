@@ -1,10 +1,10 @@
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:family_mobile/config/family_quick_login.dart';
 import 'package:family_mobile/config/flask_api_config.dart';
 import 'package:family_mobile/state/app_state.dart';
 import 'package:family_mobile/l10n/app_strings.dart';
 import 'package:family_mobile/theme/family_theme.dart';
 import 'package:family_mobile/util/api_error_message.dart';
-import 'package:family_mobile/wechat/wechat_config.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -14,35 +14,6 @@ class LoginScreen extends StatefulWidget {
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
-}
-
-Future<void> _showWechatCodeDialog(BuildContext context, AppState appState) async {
-  final t = AppStrings.of(context);
-  final controller = TextEditingController();
-  final code = await showDialog<String>(
-    context: context,
-    builder: (ctx) {
-      return AlertDialog(
-        title: Text(t.text('wechat_supabase_with_code')),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(labelText: t.text('wechat_oauth_code')),
-          autocorrect: false,
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(t.text('cancel'))),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: Text(t.text('auth_sign_in')),
-          ),
-        ],
-      );
-    },
-  );
-  controller.dispose();
-  if (code != null && code.isNotEmpty) {
-    await appState.signInWithWechatSupabase(code: code);
-  }
 }
 
 class _LoginScreenState extends State<LoginScreen> {
@@ -193,69 +164,64 @@ class _LoginScreenState extends State<LoginScreen> {
                             label: Text(t.text('auth_sign_up')),
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 18),
                         Text(
-                          t.text('wechat_need_backend'),
+                          t.text('family_quick_login_title'),
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF3E2F2A),
+                              ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          t.text('family_quick_login_hint')
+                              .replaceAll('{baba}', FamilyQuickLogin.babaEmail)
+                              .replaceAll('{mama}', FamilyQuickLogin.mamaEmail),
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: const Color(0xFF6D5A51),
                                 height: 1.35,
                               ),
                         ),
-                        if (!kIsWeb &&
-                            (defaultTargetPlatform == TargetPlatform.android ||
-                                defaultTargetPlatform == TargetPlatform.iOS)) ...[
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton.icon(
-                              style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFF07C160),
-                                foregroundColor: Colors.white,
-                              ),
-                              onPressed: appState.isBusy || !WechatConfig.isConfigured
-                                  ? null
-                                  : () => appState.signInWithWechatMobile(),
-                              icon: const Icon(Icons.chat_bubble_rounded),
-                              label: Text(
-                                t.text(
-                                  WechatConfig.isConfigured ? 'wechat_app_login' : 'wechat_app_not_configured',
-                                ),
-                              ),
-                            ),
-                          ),
-                          if (!WechatConfig.isConfigured)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Text(
-                                t.text('wechat_dart_define_hint'),
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: const Color(0xFF6D5A51),
-                                    ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: appState.isBusy
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          _emailController.text = FamilyQuickLogin.babaEmail;
+                                          _passwordController.text = FamilyQuickLogin.sharedPassword;
+                                        });
+                                        appState.signInWithEmail(
+                                          email: FamilyQuickLogin.babaEmail,
+                                          password: FamilyQuickLogin.sharedPassword,
+                                        );
+                                      },
+                                child: Text(t.text('family_quick_baba')),
                               ),
                             ),
-                        ],
-                        if (!kReleaseMode) ...[
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: appState.isBusy
-                                  ? null
-                                  : () => appState.signInWithWechatSupabase(code: 'demo_wechat'),
-                              icon: const Icon(Icons.science_outlined),
-                              label: Text(t.text('wechat_supabase_demo')),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: appState.isBusy
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          _emailController.text = FamilyQuickLogin.mamaEmail;
+                                          _passwordController.text = FamilyQuickLogin.sharedPassword;
+                                        });
+                                        appState.signInWithEmail(
+                                          email: FamilyQuickLogin.mamaEmail,
+                                          password: FamilyQuickLogin.sharedPassword,
+                                        );
+                                      },
+                                child: Text(t.text('family_quick_mama')),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: appState.isBusy ? null : () => _showWechatCodeDialog(context, appState),
-                              icon: const Icon(Icons.vpn_key_outlined),
-                              label: Text(t.text('wechat_supabase_with_code')),
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                         const SizedBox(height: 14),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,

@@ -68,6 +68,8 @@ cd supabase
 supabase functions deploy wechat-supabase-auth --no-verify-jwt
 ```
 
+If your Cursor workspace is linked to Supabase (MCP), this function may already be deployed to your project — open **Dashboard → Edge Functions** to confirm. You must still add the **Secrets** below or invocations will return 500 until `SUPABASE_ANON_KEY` (and WeChat keys when you use WeChat) are set.
+
 `config.toml` sets `verify_jwt = false` because users are not signed in yet; security relies on WeChat’s one-time `code` exchange.
 
 ### Secrets

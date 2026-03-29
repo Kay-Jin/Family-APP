@@ -15,7 +15,6 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:family_mobile/supabase/supabase_config.dart';
-import 'package:family_mobile/wechat/wechat_auth_service.dart';
 import 'package:flutter/foundation.dart';
 
 Future<void> main() async {
@@ -40,7 +39,6 @@ Future<void> main() async {
   }
   if (!kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
-    await WechatAuthService.instance.prepare();
     unawaited(FcmTokenSync.register());
   }
   runApp(FamilyApp(navigatorKey: appNavigatorKey));

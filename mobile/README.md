@@ -4,8 +4,8 @@ This folder contains a Flutter client scaffold that works with the backend in `.
 
 ## Implemented flow
 
-- **Cloud**: Email/password or **WeChat** (native app via fluwx) → **Supabase** session; families, album, care features use Postgres + Storage on Supabase.
-- **WeChat token exchange**: The app calls the **`wechat-supabase-auth` Edge Function** on your Supabase project first; if it is missing or errors, it falls back to Flask `POST /auth/wechat-supabase` (local dev or self-hosted API). Use `--dart-define=FORCE_FLASK_WECHAT_AUTH=true` to skip the Edge attempt.
+- **Cloud**: Email/password (and **家庭一键登录** for preset family accounts) → **Supabase** session; families, album, care features use Postgres + Storage on Supabase.
+- **WeChat** (fluwx + Edge Function) is **paused in the UI**; the Edge Function `wechat-supabase-auth` can stay deployed for later. `AppState` still supports exchange via Edge/Flask if you re-enable buttons.
 - **Local (optional)**: Flask + SQLite “home” features when you also sign in with the developer/mock path or dual session.
 
 ## 1) Install Flutter SDK
@@ -50,35 +50,45 @@ flutter build apk --dart-define=FLASK_BASE_URL=http://192.168.1.10:8000
 ## 3.5) Production use (families, no LAN Flask)
 
 1. Create or use a **Supabase** project; run SQL from `../supabase/migrations/` (or linked `db push`).
-2. Deploy Edge Function **`wechat-supabase-auth`** and set secrets — see `../supabase/README.md`.
-3. Build the app with your project keys (never commit the service role key; only anon/publishable in the client):
+2. Edge Functions: deploy **`wechat-supabase-auth`** and **`send-fcm-push`** (see `../supabase/README.md`). If you use Cursor with the Supabase MCP linked to your project, deployment may already be done; still add **Secrets** in the dashboard (e.g. `SUPABASE_ANON_KEY` on the WeChat function when you turn WeChat back on).
+3. **Family preset logins** (`lib/config/family_quick_login.dart`): Supabase Auth requires a real email shape. The app uses **`jinshanglong@member.family`** and **`peimeiling@member.family`** with the shared password from that file. In **Supabase → Authentication → Users → Add user**, create both addresses, set the password, and tick **email confirmed** (or disable “confirm email” for the project while testing).
+4. Build the app with your project keys (never commit the service role key; only anon/publishable in the client):
 
 ```powershell
 cd mobile
 flutter build ipa `
   --dart-define=SUPABASE_URL=https://YOUR_REF.supabase.co `
-  --dart-define=SUPABASE_ANON_KEY=your_publishable_or_anon_key `
-  --dart-define=WECHAT_APP_ID=your_wx_app_id `
-  --dart-define=WECHAT_UNIVERSAL_LINK=https://your.domain/app/ `
+  --dart-define=SUPABASE_ANON_KEY=your_publishable_or_anon_key
 ```
 
-4. **iOS**: Open `ios/Runner.xcworkspace` in Xcode, set **Signing**, **Bundle ID**, then **Product → Archive** and distribute via **TestFlight** or the App Store (same flow as other apps).
-5. **Android**: Upload the release `.aab` to Play Console with the same `dart-define` values (or CI secrets).
+5. **iOS**: Open `ios/Runner.xcworkspace` in Xcode, set **Signing** and **Bundle ID**, then **Product → Archive** for TestFlight/App Store when you have a paid Apple Developer Program membership.
 
-WeChat Open Platform: register a **mobile app**, fill **iOS bundle ID / universal link** and **Android package + signature**, and use the same **AppID** in `WECHAT_APP_ID`.
+6. **Android**: Upload the release `.aab` to Play Console with the same `dart-define` values (or CI secrets).
+
+### 3.6) 不花钱买开发者账号，能不能像 App Store 一样装 iPhone？
+
+**不能长期等价。** Apple 规定：把 App **稳定装到多台 iPhone、家人随便装、不过期**，需要 **Apple Developer Program（约 $99/年）** 走 TestFlight 或 App Store。
+
+**免费 Apple ID + Xcode** 可以：
+
+- 用 **Personal Team** 把工程 **Run 到你自己的 iPhone**；
+- 证书大约 **每 7 天**会过期，需要再用 Mac 连上手机 **重新编译安装**；
+- **无法**给家人一个永久 `.ipa` 包让他们像从商店下载一样一直用（除非每人自己用 Xcode 签，或你后续开通开发者账号）。
+
+所以没有「完全免费又和商店一样」的官方方案；当前阶段建议在 **Mac + Xcode + 数据线** 给自己装调试版，等功能和账号就绪再上 TestFlight。
 
 ## 4) App structure (current)
 
 - **Local (Flask) home**: `HomeScreen` — families, daily Q&A, photos (upload, comments, likes), birthday reminders, voice notes, etc.
 - **Cloud (Supabase)**: `SupabaseFamilyScreen` / detail — invite codes, care panel, cloud album, companion room, medical card sync, cloud birthdays, etc.
 - **Dual session**: when signed in to both backends, `DualSessionShell` uses a bottom nav (local home + cloud families). The app registers your Supabase user id on the Flask profile (`PATCH /users/me`) so the Python backend can fan out FCM to other members after local photos, likes, comments, daily answers, or birthday reminders when push env is configured.
-- **Release builds**: Debug-only demo WeChat buttons are hidden; use **微信登录** (green) with a configured `WECHAT_APP_ID` + universal link on iOS.
-- **Push**: real WeChat SDK + Firebase (`flutterfire configure`) for production FCM/APNs — see §7.
+- **Release builds**: WeChat entry is currently **hidden**; use email or **家庭一键登录**.
+- **Push**: Firebase (`flutterfire configure`) + Edge Function `send-fcm-push` secrets — see §7.
 
 ## 5) iPhone（全家使用）
 
 - **构建**：在 **Mac** 上安装 Xcode 与 Flutter，打开 `mobile/ios/Runner.xcworkspace`，用 **Apple ID** 完成签名（免费账号可装到自己的手机；分发家人建议 **TestFlight** 或企业/商店流程）。
-- **云端（推荐）**：家人只用 **邮箱 / 微信** 登录时，数据在 **Supabase**；微信换票走已部署的 **`wechat-supabase-auth` 边缘函数**，一般**不必**让家人配置局域网 Flask。
+- **云端（推荐）**：家人用 **邮箱** 或登录页的 **爸爸 / 妈妈** 一键登录时，数据在 **Supabase**。请在后台创建 `jinshanglong@member.family`、`peimeiling@member.family` 用户（见 §3.5）。微信入口已暂时关闭；边缘函数可预留给以后。
 - **局域网 Flask（可选）**：若仍使用本地家庭后端，iPhone 与电脑须 **同一 Wi‑Fi**，在登录页展开 **本地 Flask 后端** 填写 `http://192.168.x.x:8000`；**不要填 `127.0.0.1`**。
 - **首次安装**：设置 → 通用 → VPN 与设备管理 → **信任开发者**（若系统提示）。
 - **推送**：真 FCM/APNs 需在 Firebase 控制台配置 iOS 应用，将 **`GoogleService-Info.plist`** 放入 `ios/Runner/`，并在 Xcode 中为 Runner 打开 **Push Notifications** 能力（Release 归档时 `aps-environment` 应为 **production**）。占位配置仅能编译，不能收到远端推送。
