@@ -169,8 +169,36 @@ class AppState extends ChangeNotifier {
     });
   }
 
+  static const bool _forceFlaskWechatAuth =
+      bool.fromEnvironment('FORCE_FLASK_WECHAT_AUTH', defaultValue: false);
+
+  /// Tries Supabase Edge Function `wechat-supabase-auth` first (no LAN Flask for family phones),
+  /// then falls back to Flask `POST /auth/wechat-supabase` (dev / self-hosted).
   Future<void> _exchangeWechatCodeForSession(String code) async {
-    final data = await _apiClient.loginWechatSupabase(code: code.trim());
+    final trimmed = code.trim();
+    Map<String, dynamic>? data;
+
+    if (!_forceFlaskWechatAuth) {
+      try {
+        final res = await Supabase.instance.client.functions.invoke(
+          'wechat-supabase-auth',
+          body: {'code': trimmed},
+        );
+        final d = res.data;
+        if (d is Map) {
+          final refresh = d['refresh_token'];
+          if (refresh is String && refresh.isNotEmpty) {
+            data = Map<String, dynamic>.from(d);
+          }
+        }
+      } catch (e, st) {
+        debugPrint(
+          'wechat-supabase-auth Edge Function unavailable, trying Flask API: $e\n$st',
+        );
+      }
+    }
+
+    data ??= await _apiClient.loginWechatSupabase(code: trimmed);
     final refresh = data['refresh_token'] as String?;
     if (refresh == null || refresh.isEmpty) {
       throw Exception('Server did not return refresh_token');
@@ -185,7 +213,7 @@ class AppState extends ChangeNotifier {
     });
   }
 
-  /// Native WeChat app OAuth via fluwx, then same backend exchange as [signInWithWechatSupabase].
+  /// Native WeChat app OAuth via fluwx, then same token exchange as [signInWithWechatSupabase].
   Future<void> signInWithWechatMobile() async {
     await _runBusy(() async {
       try {

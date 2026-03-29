@@ -28,6 +28,9 @@ class AppStrings {
       'app_title': 'Family App',
       'welcome_home': 'Welcome Home',
       'welcome_subtitle': 'Build warm moments with your family every day.',
+      'login_cloud_title': 'Cloud sign-in',
+      'login_cloud_subtitle':
+          'Family data is stored on Supabase. Sign in with email or WeChat — same account on every iPhone.',
       'auth_email': 'Email',
       'auth_password': 'Password',
       'auth_sign_in': 'Sign in',
@@ -50,7 +53,8 @@ class AppStrings {
       'wechat_supabase_demo': 'WeChat login (demo)',
       'wechat_supabase_with_code': 'WeChat login (enter code)',
       'wechat_oauth_code': 'WeChat OAuth code',
-      'wechat_need_backend': 'Runs the Python backend on this machine and set Supabase keys in .env.',
+      'wechat_need_backend':
+          'WeChat uses the wechat-supabase-auth Edge Function (recommended) or your family API to exchange the code — see mobile/README.md. For local dev, run Flask and expand “Local Flask API” below.',
       'logout': 'Log out',
       'no_cloud_families': 'No cloud families yet.',
       'cloud_empty_families_hint':
@@ -474,6 +478,8 @@ class AppStrings {
       'app_title': '家庭应用',
       'welcome_home': '欢迎回家',
       'welcome_subtitle': '每天和家人一起创造温暖时刻。',
+      'login_cloud_title': '登录（云端）',
+      'login_cloud_subtitle': '家庭数据保存在 Supabase 服务器，换手机登录同一账号即可同步。支持邮箱与微信。',
       'auth_email': '邮箱',
       'auth_password': '密码',
       'auth_sign_in': '登录',
@@ -496,7 +502,8 @@ class AppStrings {
       'wechat_supabase_demo': '微信登录（演示）',
       'wechat_supabase_with_code': '微信登录（输入 code）',
       'wechat_oauth_code': '微信授权 code',
-      'wechat_need_backend': '需在本机运行 Python 后端，并在 .env 配置 Supabase 密钥。',
+      'wechat_need_backend':
+          '微信登录通过 wechat-supabase-auth 边缘函数（推荐）或家庭 API 兑换授权码，家人无需配置电脑局域网，详见 mobile/README.md。本地开发可运行 Flask 并展开下方「本地 Flask 后端」。',
       'logout': '退出登录',
       'no_cloud_families': '还没有云端家庭。',
       'cloud_empty_families_hint': '在上方创建家庭，或向家人索取邀请码后在下方加入。',
@@ -906,6 +913,9 @@ class AppStrings {
       'app_title': '가족 앱',
       'welcome_home': '환영합니다',
       'welcome_subtitle': '가족과 함께 따뜻한 순간을 매일 쌓아가요.',
+      'login_cloud_title': '클라우드 로그인',
+      'login_cloud_subtitle':
+          '가족 데이터는 Supabase에 저장됩니다. 이메일 또는 위챗으로 로그인하면 기기 간 동기화됩니다.',
       'auth_email': '이메일',
       'auth_password': '비밀번호',
       'auth_sign_in': '로그인',
@@ -928,7 +938,8 @@ class AppStrings {
       'wechat_supabase_demo': '위챗 로그인(데모)',
       'wechat_supabase_with_code': '위챗 로그인(code 입력)',
       'wechat_oauth_code': '위챗 OAuth code',
-      'wechat_need_backend': '이 PC에서 Python 백엔드를 실행하고 .env에 Supabase 키를 설정하세요.',
+      'wechat_need_backend':
+          '위챗 로그인은 wechat-supabase-auth Edge Function(권장) 또는 가족 API로 code를 교환합니다. mobile/README.md 참고. 로컬 개발 시 Flask 실행 후 아래 Flask 주소를 설정하세요.',
       'logout': '로그아웃',
       'no_cloud_families': '클라우드 가족이 아직 없어요.',
       'cloud_empty_families_hint': '위에서 가족을 만들거나, 초대 코드를 받아 아래에서 참여해 보세요.',

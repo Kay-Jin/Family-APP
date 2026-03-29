@@ -54,3 +54,42 @@ curl -sS -X POST "https://YOUR_PROJECT.supabase.co/functions/v1/send-fcm-push" \
 ### Flask (SQLite) integration
 
 The repo backend can call this function after local-family events when `PUSH_DISPATCH_SECRET` + `SUPABASE_URL` are set in the Flask `.env`. Linked users are those with `users.supabase_user_id` set (`PATCH /users/me` from the app). See `../backend/README.md`.
+
+---
+
+## Edge Function: `wechat-supabase-auth`
+
+Exchanges a **WeChat mobile OAuth `code`** for **Supabase `access_token` + `refresh_token`** (same JSON contract as Flask `POST /auth/wechat-supabase`). The Flutter app invokes this function **before** falling back to Flask, so family phones do not need your home PC’s LAN IP for WeChat login.
+
+### Deploy
+
+```bash
+cd supabase
+supabase functions deploy wechat-supabase-auth --no-verify-jwt
+```
+
+`config.toml` sets `verify_jwt = false` because users are not signed in yet; security relies on WeChat’s one-time `code` exchange.
+
+### Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `WECHAT_APP_ID` | WeChat Open Platform mobile app AppID |
+| `WECHAT_APP_SECRET` | App secret |
+| `SUPABASE_ANON_KEY` | Project anon / publishable key (for password grant after user upsert) |
+| `WECHAT_DERIVE_SECRET` | Optional; **must match** Flask `WECHAT_DERIVE_SECRET` or `JWT_SECRET` if you use both Edge and Flask for the same users |
+| *(auto)* `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Injected on hosted Supabase |
+
+### Request
+
+`POST` with `Authorization: Bearer <anon_key>` and `apikey: <anon_key>` (the Supabase client does this automatically). Body:
+
+```json
+{ "code": "<wechat_oauth_code_or_demo_wechat>" }
+```
+
+### Response
+
+```json
+{ "access_token": "...", "refresh_token": "..." }
+```

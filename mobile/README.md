@@ -4,11 +4,9 @@ This folder contains a Flutter client scaffold that works with the backend in `.
 
 ## Implemented flow
 
-- Login (mock WeChat code)
-- Create family / join family
-- Refresh and display:
-  - daily questions
-  - photos
+- **Cloud**: Email/password or **WeChat** (native app via fluwx) → **Supabase** session; families, album, care features use Postgres + Storage on Supabase.
+- **WeChat token exchange**: The app calls the **`wechat-supabase-auth` Edge Function** on your Supabase project first; if it is missing or errors, it falls back to Flask `POST /auth/wechat-supabase` (local dev or self-hosted API). Use `--dart-define=FORCE_FLASK_WECHAT_AUTH=true` to skip the Edge attempt.
+- **Local (optional)**: Flask + SQLite “home” features when you also sign in with the developer/mock path or dual session.
 
 ## 1) Install Flutter SDK
 
@@ -49,17 +47,39 @@ flutter run --dart-define=FLASK_BASE_URL=http://192.168.1.10:8000
 flutter build apk --dart-define=FLASK_BASE_URL=http://192.168.1.10:8000
 ```
 
+## 3.5) Production use (families, no LAN Flask)
+
+1. Create or use a **Supabase** project; run SQL from `../supabase/migrations/` (or linked `db push`).
+2. Deploy Edge Function **`wechat-supabase-auth`** and set secrets — see `../supabase/README.md`.
+3. Build the app with your project keys (never commit the service role key; only anon/publishable in the client):
+
+```powershell
+cd mobile
+flutter build ipa `
+  --dart-define=SUPABASE_URL=https://YOUR_REF.supabase.co `
+  --dart-define=SUPABASE_ANON_KEY=your_publishable_or_anon_key `
+  --dart-define=WECHAT_APP_ID=your_wx_app_id `
+  --dart-define=WECHAT_UNIVERSAL_LINK=https://your.domain/app/ `
+```
+
+4. **iOS**: Open `ios/Runner.xcworkspace` in Xcode, set **Signing**, **Bundle ID**, then **Product → Archive** and distribute via **TestFlight** or the App Store (same flow as other apps).
+5. **Android**: Upload the release `.aab` to Play Console with the same `dart-define` values (or CI secrets).
+
+WeChat Open Platform: register a **mobile app**, fill **iOS bundle ID / universal link** and **Android package + signature**, and use the same **AppID** in `WECHAT_APP_ID`.
+
 ## 4) App structure (current)
 
 - **Local (Flask) home**: `HomeScreen` — families, daily Q&A, photos (upload, comments, likes), birthday reminders, voice notes, etc.
 - **Cloud (Supabase)**: `SupabaseFamilyScreen` / detail — invite codes, care panel, cloud album, companion room, medical card sync, cloud birthdays, etc.
 - **Dual session**: when signed in to both backends, `DualSessionShell` uses a bottom nav (local home + cloud families). The app registers your Supabase user id on the Flask profile (`PATCH /users/me`) so the Python backend can fan out FCM to other members after local photos, likes, comments, daily answers, or birthday reminders when push env is configured.
-- **Still rough / prod**: mock WeChat code path for some flows; real WeChat SDK + Firebase (`flutterfire configure`) for production push — see §7.
+- **Release builds**: Debug-only demo WeChat buttons are hidden; use **微信登录** (green) with a configured `WECHAT_APP_ID` + universal link on iOS.
+- **Push**: real WeChat SDK + Firebase (`flutterfire configure`) for production FCM/APNs — see §7.
 
 ## 5) iPhone（全家使用）
 
 - **构建**：在 **Mac** 上安装 Xcode 与 Flutter，打开 `mobile/ios/Runner.xcworkspace`，用 **Apple ID** 完成签名（免费账号可装到自己的手机；分发家人建议 **TestFlight** 或企业/商店流程）。
-- **局域网后端**：iPhone 与运行 Flask 的电脑必须在 **同一 Wi‑Fi**。电脑端启动后端并监听 `0.0.0.0`（见 `../backend/README.md`）。在登录页展开 **本地 Flask 后端**，填写电脑的局域网地址，例如 `http://192.168.1.10:8000`。**真机不要填 `127.0.0.1`**（那是手机自己，不是你的电脑）。
+- **云端（推荐）**：家人只用 **邮箱 / 微信** 登录时，数据在 **Supabase**；微信换票走已部署的 **`wechat-supabase-auth` 边缘函数**，一般**不必**让家人配置局域网 Flask。
+- **局域网 Flask（可选）**：若仍使用本地家庭后端，iPhone 与电脑须 **同一 Wi‑Fi**，在登录页展开 **本地 Flask 后端** 填写 `http://192.168.x.x:8000`；**不要填 `127.0.0.1`**。
 - **首次安装**：设置 → 通用 → VPN 与设备管理 → **信任开发者**（若系统提示）。
 - **推送**：真 FCM/APNs 需在 Firebase 控制台配置 iOS 应用，将 **`GoogleService-Info.plist`** 放入 `ios/Runner/`，并在 Xcode 中为 Runner 打开 **Push Notifications** 能力（Release 归档时 `aps-environment` 应为 **production**）。占位配置仅能编译，不能收到远端推送。
 - **显示名**：主屏幕名称在 `ios/Runner/Info.plist` 的 `CFBundleDisplayName`（当前为「家人」）。正式发布前请将 **Bundle Identifier** 从 `com.example.*` 改为你自己的反向域名（Xcode → Runner → Signing & Capabilities）。

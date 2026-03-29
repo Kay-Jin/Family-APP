@@ -124,7 +124,23 @@ class _LoginScreenState extends State<LoginScreen> {
                                 color: const Color(0xFF6D5A51),
                               ),
                         ),
-                        const SizedBox(height: 22),
+                        const SizedBox(height: 20),
+                        Text(
+                          t.text('login_cloud_title'),
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF3E2F2A),
+                              ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          t.text('login_cloud_subtitle'),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: const Color(0xFF6D5A51),
+                                height: 1.35,
+                              ),
+                        ),
+                        const SizedBox(height: 18),
                         TextField(
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
@@ -177,6 +193,69 @@ class _LoginScreenState extends State<LoginScreen> {
                             label: Text(t.text('auth_sign_up')),
                           ),
                         ),
+                        const SizedBox(height: 16),
+                        Text(
+                          t.text('wechat_need_backend'),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: const Color(0xFF6D5A51),
+                                height: 1.35,
+                              ),
+                        ),
+                        if (!kIsWeb &&
+                            (defaultTargetPlatform == TargetPlatform.android ||
+                                defaultTargetPlatform == TargetPlatform.iOS)) ...[
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF07C160),
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: appState.isBusy || !WechatConfig.isConfigured
+                                  ? null
+                                  : () => appState.signInWithWechatMobile(),
+                              icon: const Icon(Icons.chat_bubble_rounded),
+                              label: Text(
+                                t.text(
+                                  WechatConfig.isConfigured ? 'wechat_app_login' : 'wechat_app_not_configured',
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (!WechatConfig.isConfigured)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                t.text('wechat_dart_define_hint'),
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: const Color(0xFF6D5A51),
+                                    ),
+                              ),
+                            ),
+                        ],
+                        if (!kReleaseMode) ...[
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: appState.isBusy
+                                  ? null
+                                  : () => appState.signInWithWechatSupabase(code: 'demo_wechat'),
+                              icon: const Icon(Icons.science_outlined),
+                              label: Text(t.text('wechat_supabase_demo')),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: appState.isBusy ? null : () => _showWechatCodeDialog(context, appState),
+                              icon: const Icon(Icons.vpn_key_outlined),
+                              label: Text(t.text('wechat_supabase_with_code')),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 14),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -201,62 +280,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          t.text('wechat_need_backend'),
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: const Color(0xFF6D5A51),
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: appState.isBusy
-                                ? null
-                                : () => appState.signInWithWechatSupabase(code: 'demo_wechat'),
-                            icon: const Icon(Icons.chat_bubble_outline),
-                            label: Text(t.text('wechat_supabase_demo')),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: appState.isBusy ? null : () => _showWechatCodeDialog(context, appState),
-                            icon: const Icon(Icons.vpn_key_outlined),
-                            label: Text(t.text('wechat_supabase_with_code')),
-                          ),
-                        ),
-                        if (!kIsWeb &&
-                            (defaultTargetPlatform == TargetPlatform.android ||
-                                defaultTargetPlatform == TargetPlatform.iOS)) ...[
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: appState.isBusy || !WechatConfig.isConfigured
-                                  ? null
-                                  : () => appState.signInWithWechatMobile(),
-                              icon: const Icon(Icons.phone_android_outlined),
-                              label: Text(
-                                t.text(
-                                  WechatConfig.isConfigured ? 'wechat_app_login' : 'wechat_app_not_configured',
-                                ),
-                              ),
-                            ),
-                          ),
-                          if (!WechatConfig.isConfigured)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Text(
-                                t.text('wechat_dart_define_hint'),
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: const Color(0xFF6D5A51),
-                                    ),
-                              ),
-                            ),
-                        ],
                         if (appState.error != null) ...[
                           const SizedBox(height: 12),
                           Text(
@@ -371,50 +394,52 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
-                        ExpansionTile(
-                          title: Text(
-                            t.text('dev_local_login'),
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                          ),
-                          initiallyExpanded: _devExpanded,
-                          onExpansionChanged: (v) => setState(() => _devExpanded = v),
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  TextField(
-                                    controller: _nameController,
-                                    decoration: InputDecoration(
-                                      labelText: t.text('display_name'),
-                                      prefixIcon: const Icon(Icons.person_outline),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  TextField(
-                                    controller: _codeController,
-                                    decoration: InputDecoration(
-                                      labelText: t.text('mock_wechat_code'),
-                                      prefixIcon: const Icon(Icons.verified_user_outlined),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  FilledButton.tonal(
-                                    onPressed: appState.isBusy
-                                        ? null
-                                        : () => appState.login(
-                                              _codeController.text.trim(),
-                                              _nameController.text.trim(),
-                                            ),
-                                    child: Text(t.text('enter_family_app')),
-                                  ),
-                                ],
-                              ),
+                        if (kDebugMode) ...[
+                          const SizedBox(height: 8),
+                          ExpansionTile(
+                            title: Text(
+                              t.text('dev_local_login'),
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                             ),
-                          ],
-                        ),
+                            initiallyExpanded: _devExpanded,
+                            onExpansionChanged: (v) => setState(() => _devExpanded = v),
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    TextField(
+                                      controller: _nameController,
+                                      decoration: InputDecoration(
+                                        labelText: t.text('display_name'),
+                                        prefixIcon: const Icon(Icons.person_outline),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    TextField(
+                                      controller: _codeController,
+                                      decoration: InputDecoration(
+                                        labelText: t.text('mock_wechat_code'),
+                                        prefixIcon: const Icon(Icons.verified_user_outlined),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    FilledButton.tonal(
+                                      onPressed: appState.isBusy
+                                          ? null
+                                          : () => appState.login(
+                                                _codeController.text.trim(),
+                                                _nameController.text.trim(),
+                                              ),
+                                      child: Text(t.text('enter_family_app')),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),

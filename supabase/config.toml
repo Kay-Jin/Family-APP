@@ -4,3 +4,6 @@ project_id = "your-project-ref"
 
 [functions.send-fcm-push]
 verify_jwt = false
+
+[functions.wechat-supabase-auth]
+verify_jwt = false
