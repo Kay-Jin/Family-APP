@@ -1,4 +1,5 @@
 import 'package:family_mobile/l10n/app_strings.dart';
+import 'package:family_mobile/screens/supabase_cloud_album_panel.dart';
 import 'package:family_mobile/supabase/cloud_daily_answer.dart';
 import 'package:family_mobile/supabase/cloud_daily_question.dart';
 import 'package:family_mobile/supabase/daily_repository.dart';
@@ -183,51 +184,76 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.family.name),
-      ),
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text(
-              '${_t('invite_code')}: ${widget.family.inviteCode}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: const Color(0xFF6D5A51)),
-            ),
-            const SizedBox(height: 16),
-            Text(_t('daily_questions'), style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _dateController,
-              decoration: InputDecoration(labelText: _t('question_date')),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _questionTextController,
-              decoration: InputDecoration(labelText: _t('question_text')),
-              maxLines: 2,
-            ),
-            const SizedBox(height: 8),
-            FilledButton(
-              onPressed: _submitting ? null : _addQuestion,
-              child: Text(_t('add_question')),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 8),
-              Text(_error!, style: const TextStyle(color: Colors.red)),
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(widget.family.name),
+          bottom: TabBar(
+            tabs: [
+              Tab(text: _t('daily_questions')),
+              Tab(text: _t('photos_title')),
             ],
-            const SizedBox(height: 20),
-            if (_loading)
-              const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
-            else if (_questions.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Text(_t('no_questions'), style: Theme.of(context).textTheme.bodyMedium),
-              )
-            else
-              ..._questions.map((q) => _buildQuestionCard(q)),
+          ),
+        ),
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: Text(
+                '${_t('invite_code')}: ${widget.family.inviteCode}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: const Color(0xFF6D5A51)),
+              ),
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  RefreshIndicator(
+                    onRefresh: _load,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        Text(_t('daily_questions'), style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _dateController,
+                          decoration: InputDecoration(labelText: _t('question_date')),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _questionTextController,
+                          decoration: InputDecoration(labelText: _t('question_text')),
+                          maxLines: 2,
+                        ),
+                        const SizedBox(height: 8),
+                        FilledButton(
+                          onPressed: _submitting ? null : _addQuestion,
+                          child: Text(_t('add_question')),
+                        ),
+                        if (_error != null) ...[
+                          const SizedBox(height: 8),
+                          Text(_error!, style: const TextStyle(color: Colors.red)),
+                        ],
+                        const SizedBox(height: 20),
+                        if (_loading)
+                          const Center(
+                              child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
+                        else if (_questions.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            child: Text(_t('no_questions'), style: Theme.of(context).textTheme.bodyMedium),
+                          )
+                        else
+                          ..._questions.map((q) => _buildQuestionCard(q)),
+                      ],
+                    ),
+                  ),
+                  SupabaseCloudAlbumPanel(familyId: widget.family.id),
+                ],
+              ),
+            ),
           ],
         ),
       ),

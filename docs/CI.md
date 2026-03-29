@@ -50,7 +50,8 @@ CI（Continuous Integration）会在你**推送代码**或**发起 Pull Request*
 
 若 `schema_checks.sql` 的 `failed_count` 大于 0，日志里的 `details` 会列出缺列、缺函数、缺 Storage 桶/策略等。请先在 Supabase **SQL Editor** 执行与线上一致的迁移，例如：
 
-- [`supabase/migrations/20260328_answer_images_and_storage.sql`](../supabase/migrations/20260328_answer_images_and_storage.sql)（`daily_answers.image_path` + `family_answer_images` 桶与三条 storage 策略）
+- [`supabase/migrations/20260328_answer_images_and_storage.sql`](../supabase/migrations/20260328_answer_images_and_storage.sql)（`daily_answers.image_path` + `family_answer_images` 桶）
+- [`supabase/migrations/20260329_family_album.sql`](../supabase/migrations/20260329_family_album.sql)（`family_photos` 表 + `family_album_images` 桶）
 
 执行后再跑一次检查，直到 `failed_count = 0`。完整基线仍以 [`supabase/schema.sql`](../supabase/schema.sql) 为准。
 

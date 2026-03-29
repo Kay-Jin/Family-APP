@@ -13,7 +13,7 @@
 
 WITH
   exp_tables AS (
-    SELECT unnest(ARRAY['families', 'family_members', 'daily_questions', 'daily_answers']) AS t
+    SELECT unnest(ARRAY['families', 'family_members', 'daily_questions', 'daily_answers', 'family_photos']) AS t
   ),
   missing_tables AS (
     SELECT
@@ -35,7 +35,7 @@ WITH
     JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'public'
       AND c.relkind = 'r'
-      AND c.relname IN ('families', 'family_members', 'daily_questions', 'daily_answers')
+      AND c.relname IN ('families', 'family_members', 'daily_questions', 'daily_answers', 'family_photos')
       AND c.relrowsecurity IS NOT TRUE
   ),
   missing_columns AS (
@@ -45,7 +45,8 @@ WITH
         ('families', ARRAY['id', 'name', 'invite_code', 'created_at']),
         ('family_members', ARRAY['family_id', 'user_id', 'role', 'created_at']),
         ('daily_questions', ARRAY['id', 'family_id', 'question_date', 'question_text', 'created_at']),
-        ('daily_answers', ARRAY['id', 'question_id', 'user_id', 'author_display_name', 'answer_text', 'image_path', 'created_at'])
+        ('daily_answers', ARRAY['id', 'question_id', 'user_id', 'author_display_name', 'answer_text', 'image_path', 'created_at']),
+        ('family_photos', ARRAY['id', 'family_id', 'user_id', 'caption', 'image_path', 'uploader_display_name', 'created_at'])
     ) AS spec(tbl, cols)
     CROSS JOIN LATERAL unnest(spec.cols) AS c(col)
     WHERE NOT EXISTS (
@@ -117,6 +118,18 @@ WITH
         AND b.file_size_limit = 10485760
     )
   ),
+  storage_bucket_album AS (
+    SELECT
+      'storage_bucket_family_album_images' AS check_id,
+      'storage.buckets row id=family_album_images missing, not public, or wrong size limit' AS detail
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM storage.buckets b
+      WHERE b.id = 'family_album_images'
+        AND b.public IS TRUE
+        AND b.file_size_limit = 10485760
+    )
+  ),
   storage_policies AS (
     SELECT *
     FROM (VALUES
@@ -138,6 +151,27 @@ WITH
       format('storage.objects policy %I missing', name) AS detail
     FROM storage_policies
   ),
+  storage_policies_album AS (
+    SELECT *
+    FROM (VALUES
+      ('album_images_select_member'),
+      ('album_images_insert_own'),
+      ('album_images_delete_own')
+    ) AS p(name)
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM pg_policies pol
+      WHERE pol.schemaname = 'storage'
+        AND pol.tablename = 'objects'
+        AND pol.policyname = p.name
+    )
+  ),
+  storage_policies_album_flat AS (
+    SELECT
+      'missing_storage_policy_' || name AS check_id,
+      format('storage.objects policy %I missing', name) AS detail
+    FROM storage_policies_album
+  ),
   failures AS (
     SELECT * FROM missing_tables
     UNION ALL SELECT * FROM rls_off
@@ -146,7 +180,9 @@ WITH
     UNION ALL SELECT * FROM missing_family_insert_trigger
     UNION ALL SELECT * FROM join_rpc_not_granted
     UNION ALL SELECT * FROM storage_bucket
+    UNION ALL SELECT * FROM storage_bucket_album
     UNION ALL SELECT * FROM storage_policies_flat
+    UNION ALL SELECT * FROM storage_policies_album_flat
   )
 SELECT
   (SELECT count(*)::int FROM failures) AS failed_count,
