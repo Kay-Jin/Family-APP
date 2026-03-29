@@ -264,7 +264,12 @@ class _SupabaseFamilyDetailScreenState extends State<SupabaseFamilyDetailScreen>
                     ),
                   ),
                   SupabaseCloudAlbumPanel(familyId: widget.family.id),
-                  SupabaseFamilyCarePanel(familyId: widget.family.id),
+                  Builder(
+                    builder: (ctx) => SupabaseFamilyCarePanel(
+                      familyId: widget.family.id,
+                      onOpenPhotosTab: () => DefaultTabController.of(ctx).animateTo(1),
+                    ),
+                  ),
                 ],
               ),
             ),

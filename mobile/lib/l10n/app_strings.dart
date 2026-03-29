@@ -267,6 +267,12 @@ class AppStrings {
       'companion_timer_remaining': 'Time left',
       'companion_timer_done': 'Nice — five minutes together.',
       'medical_card_mine': 'My medical & emergency card',
+      'companion_open_photos_tab': 'Open family Photos tab (together)',
+      'medical_reload_from_cloud': 'Reload from cloud',
+      'care_daily_local_reminder': 'Daily gentle reminder',
+      'care_daily_local_reminder_subtitle': 'Local notification around 10:00 — not a push from the server.',
+      'care_notif_daily_title': 'Family care',
+      'care_notif_daily_body': 'Take a moment to check in with your family.',
     },
     'zh': {
       'app_title': '家庭应用',
@@ -504,6 +510,12 @@ class AppStrings {
       'companion_timer_remaining': '剩余时间',
       'companion_timer_done': '五分钟陪伴完成，真好。',
       'medical_card_mine': '我的医疗与紧急信息',
+      'companion_open_photos_tab': '打开家庭「照片」标签（一起看）',
+      'medical_reload_from_cloud': '从云端重新载入',
+      'care_daily_local_reminder': '每日温和提醒',
+      'care_daily_local_reminder_subtitle': '本机约在 10:00 提醒，非服务端推送。',
+      'care_notif_daily_title': '家庭关怀',
+      'care_notif_daily_body': '抽空看看家人、问候一声吧。',
     },
     'ko': {
       'app_title': '가족 앱',
@@ -742,6 +754,12 @@ class AppStrings {
       'companion_timer_remaining': '남은 시간',
       'companion_timer_done': '5분 함께하기 완료!',
       'medical_card_mine': '내 의료·비상 정보',
+      'companion_open_photos_tab': '가족 사진 탭 열기(함께)',
+      'medical_reload_from_cloud': '클라우드에서 다시 불러오기',
+      'care_daily_local_reminder': '매일 부드러운 알림',
+      'care_daily_local_reminder_subtitle': '기기 로컬 알림(약 10시), 서버 푸시 아님.',
+      'care_notif_daily_title': '가족 케어',
+      'care_notif_daily_body': '가족에게 안부를 나눌 시간이에요.',
     },
   };
 }

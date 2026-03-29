@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:family_mobile/screens/home_screen.dart';
 import 'package:family_mobile/l10n/app_strings.dart';
+import 'package:family_mobile/push/care_local_notifications.dart';
+import 'package:family_mobile/push/fcm_token_sync.dart';
 import 'package:family_mobile/screens/login_screen.dart';
 import 'package:family_mobile/screens/supabase_family_screen.dart';
 import 'package:family_mobile/screens/dual_session_shell.dart';
@@ -18,9 +22,14 @@ Future<void> main() async {
     url: SupabaseConfig.url,
     anonKey: SupabaseConfig.anonKey,
   );
+  if (!kIsWeb) {
+    await CareLocalNotifications.ensureInitialized();
+    await CareLocalNotifications.rescheduleIfEnabled();
+  }
   if (!kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
     await WechatAuthService.instance.prepare();
+    unawaited(FcmTokenSync.register());
   }
   runApp(const FamilyApp());
 }

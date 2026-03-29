@@ -4,7 +4,9 @@ import 'package:family_mobile/screens/supabase_family_detail_screen.dart';
 import 'package:family_mobile/supabase/family_repository.dart';
 import 'package:family_mobile/supabase/family_row.dart';
 import 'package:family_mobile/state/app_state.dart';
+import 'package:family_mobile/push/care_local_notifications.dart';
 import 'package:family_mobile/util/api_error_message.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -22,11 +24,41 @@ class _SupabaseFamilyScreenState extends State<SupabaseFamilyScreen> {
   bool _loading = true;
   String? _error;
   List<FamilyRow> _families = [];
+  bool _dailyReminder = false;
+  bool _dailyReminderPrefLoaded = false;
 
   @override
   void initState() {
     super.initState();
     _refresh();
+    _loadDailyReminderPref();
+  }
+
+  Future<void> _loadDailyReminderPref() async {
+    if (kIsWeb) return;
+    final v = await CareLocalNotifications.isEnabled();
+    if (mounted) {
+      setState(() {
+        _dailyReminder = v;
+        _dailyReminderPrefLoaded = true;
+      });
+    }
+  }
+
+  Future<void> _setDailyReminder(bool value) async {
+    if (kIsWeb) return;
+    try {
+      await CareLocalNotifications.setEnabled(
+        enabled: value,
+        title: _t('care_notif_daily_title'),
+        body: _t('care_notif_daily_body'),
+      );
+      if (mounted) setState(() => _dailyReminder = value);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_t('error_generic'))));
+      }
+    }
   }
 
   @override
@@ -220,6 +252,19 @@ class _SupabaseFamilyScreenState extends State<SupabaseFamilyScreen> {
               onPressed: _loading ? null : _join,
               child: Text(_t('join_family_supabase')),
             ),
+            if (!kIsWeb && _dailyReminderPrefLoaded) ...[
+              const SizedBox(height: 16),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(_t('care_daily_local_reminder')),
+                subtitle: Text(
+                  _t('care_daily_local_reminder_subtitle'),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: const Color(0xFF6D5A51)),
+                ),
+                value: _dailyReminder,
+                onChanged: _setDailyReminder,
+              ),
+            ],
             if (_error != null) ...[
               const SizedBox(height: 8),
               Text(_error!, style: const TextStyle(color: Colors.red)),

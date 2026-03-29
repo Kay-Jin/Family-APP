@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 
 /// Low-friction "same five minutes" ritual: timer + ideas (no real-time sync).
 class CompanionRoomScreen extends StatefulWidget {
-  const CompanionRoomScreen({super.key});
+  const CompanionRoomScreen({super.key, this.onOpenPhotosTogether});
+
+  /// After pop, switches the family detail screen to the Photos tab (provided by caller).
+  final VoidCallback? onOpenPhotosTogether;
 
   @override
   State<CompanionRoomScreen> createState() => _CompanionRoomScreenState();
@@ -84,6 +87,18 @@ class _CompanionRoomScreenState extends State<CompanionRoomScreen> {
           Text(_t('companion_activity_song'), style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 6),
           Text(_t('companion_activity_homework'), style: Theme.of(context).textTheme.titleSmall),
+          if (widget.onOpenPhotosTogether != null) ...[
+            const SizedBox(height: 24),
+            FilledButton.tonal(
+              onPressed: () {
+                Navigator.of(context).pop();
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  widget.onOpenPhotosTogether?.call();
+                });
+              },
+              child: Text(_t('companion_open_photos_tab')),
+            ),
+          ],
         ],
       ),
     );

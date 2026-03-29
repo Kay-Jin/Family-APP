@@ -5,6 +5,7 @@ import 'package:family_mobile/care/quick_status_code.dart';
 import 'package:family_mobile/l10n/app_strings.dart';
 import 'package:family_mobile/screens/companion_room_screen.dart';
 import 'package:family_mobile/supabase/care_cloud_repository.dart';
+import 'package:family_mobile/supabase/care_family_repository.dart';
 import 'package:family_mobile/supabase/cloud_family_birthday_reminder.dart';
 import 'package:family_mobile/supabase/cloud_family_status_post.dart';
 import 'package:family_mobile/supabase/cloud_family_voice_message.dart';
@@ -20,16 +21,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseFamilyCarePanel extends StatefulWidget {
-  const SupabaseFamilyCarePanel({super.key, required this.familyId});
+  const SupabaseFamilyCarePanel({
+    super.key,
+    required this.familyId,
+    this.repository,
+    this.onOpenPhotosTab,
+  });
 
   final String familyId;
+  final CareFamilyRepository? repository;
+  final VoidCallback? onOpenPhotosTab;
 
   @override
   State<SupabaseFamilyCarePanel> createState() => _SupabaseFamilyCarePanelState();
 }
 
 class _SupabaseFamilyCarePanelState extends State<SupabaseFamilyCarePanel> {
-  final _repo = CareCloudRepository();
+  late final CareFamilyRepository _repo;
   final _statusNote = TextEditingController();
   final _voiceTitle = TextEditingController();
   final _bdName = TextEditingController();
@@ -118,8 +126,14 @@ class _SupabaseFamilyCarePanelState extends State<SupabaseFamilyCarePanel> {
   @override
   void initState() {
     super.initState();
+    _repo = widget.repository ?? CareCloudRepository();
     _loadLocalUiPrefs();
     _refresh();
+  }
+
+  Future<void> _reloadMedicalFromCloud() async {
+    setState(() => _medicalFormSyncedFromCloud = false);
+    await _refresh();
   }
 
   Future<void> _loadLocalUiPrefs() async {
@@ -570,10 +584,19 @@ class _SupabaseFamilyCarePanelState extends State<SupabaseFamilyCarePanel> {
             ..._posts.take(12).map((p) => _statusTile(p, scaled)),
           const SizedBox(height: 20),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(_t('voice_mailbox'), style: theme.textTheme.titleMedium),
-              Text(_t('voice_permission_copy'), style: theme.textTheme.bodySmall),
+              Expanded(
+                child: Text(_t('voice_mailbox'), style: theme.textTheme.titleMedium),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _t('voice_permission_copy'),
+                  style: theme.textTheme.bodySmall,
+                  textAlign: TextAlign.end,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 6),
@@ -631,9 +654,20 @@ class _SupabaseFamilyCarePanelState extends State<SupabaseFamilyCarePanel> {
             style: scaled,
           ),
           const SizedBox(height: 8),
-          FilledButton(
-            onPressed: _busy ? null : _saveMedical,
-            child: Text(_t('save_medical_card')),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton(
+                  onPressed: _busy ? null : _saveMedical,
+                  child: Text(_t('save_medical_card')),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: _busy ? null : _reloadMedicalFromCloud,
+                child: Text(_t('medical_reload_from_cloud')),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           Text(_t('care_family_medical_summary'), style: theme.textTheme.titleSmall),
@@ -716,7 +750,11 @@ class _SupabaseFamilyCarePanelState extends State<SupabaseFamilyCarePanel> {
           OutlinedButton.icon(
             onPressed: () {
               Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => const CompanionRoomScreen()),
+                MaterialPageRoute<void>(
+                  builder: (_) => CompanionRoomScreen(
+                    onOpenPhotosTogether: widget.onOpenPhotosTab,
+                  ),
+                ),
               );
             },
             icon: const Icon(Icons.timer_outlined),

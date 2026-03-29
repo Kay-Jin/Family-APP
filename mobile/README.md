@@ -59,3 +59,8 @@ flutter run -d emulator-5554
 You can also double-click this file in Explorer:
 
 - `mobile/tools/warmup_android_cache.bat`
+
+## 6) Push notifications (FCM) and local care reminders
+
+- **Local daily reminder**: Cloud families screen → toggle “Daily gentle reminder” (device notification around 10:00, not server push).
+- **FCM token → Supabase** `device_push_tokens`: run `dart pub global activate flutterfire_cli` then `flutterfire configure` in `mobile/` to replace `lib/firebase_options.dart` and add real `android/app/google-services.json` (and iOS `GoogleService-Info.plist` when building for iOS). Placeholder files let the project compile; real tokens require a Firebase project.

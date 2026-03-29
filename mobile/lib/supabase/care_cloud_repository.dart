@@ -1,13 +1,14 @@
 import 'dart:typed_data';
 
 import 'package:family_mobile/care/quick_status_code.dart';
+import 'package:family_mobile/supabase/care_family_repository.dart';
 import 'package:family_mobile/supabase/cloud_family_birthday_reminder.dart';
 import 'package:family_mobile/supabase/cloud_family_status_post.dart';
 import 'package:family_mobile/supabase/cloud_family_voice_message.dart';
 import 'package:family_mobile/supabase/cloud_medical_card.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class CareCloudRepository {
+class CareCloudRepository implements CareFamilyRepository {
   CareCloudRepository({SupabaseClient? client}) : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
