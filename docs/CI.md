@@ -53,6 +53,7 @@ CI（Continuous Integration）会在你**推送代码**或**发起 Pull Request*
 - [`supabase/migrations/20260328_answer_images_and_storage.sql`](../supabase/migrations/20260328_answer_images_and_storage.sql)（`daily_answers.image_path` + `family_answer_images` 桶）
 - [`supabase/migrations/20260329_family_album.sql`](../supabase/migrations/20260329_family_album.sql)（`family_photos` 表 + `family_album_images` 桶）
 - [`supabase/migrations/20260330_family_album_engagement.sql`](../supabase/migrations/20260330_family_album_engagement.sql)（相册点赞与评论）
+- [`supabase/migrations/20260331_family_photos_with_counts_view.sql`](../supabase/migrations/20260331_family_photos_with_counts_view.sql)（相册列表聚合视图 `family_photos_with_counts`）
 
 执行后再跑一次检查，直到 `failed_count = 0`。完整基线仍以 [`supabase/schema.sql`](../supabase/schema.sql) 为准。
 

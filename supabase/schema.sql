@@ -486,6 +486,26 @@ for delete
 to authenticated
 using (user_id = auth.uid());
 
+-- Read-only: one query for grid thumbnails with engagement counts (RLS via family_photos).
+create or replace view public.family_photos_with_counts as
+select
+  p.id,
+  p.family_id,
+  p.user_id,
+  p.caption,
+  p.image_path,
+  p.uploader_display_name,
+  p.created_at,
+  coalesce(
+    (select count(*)::bigint from public.family_photo_likes l where l.photo_id = p.id),
+    0
+  ) as like_count,
+  coalesce(
+    (select count(*)::bigint from public.family_photo_comments c where c.photo_id = p.id),
+    0
+  ) as comment_count
+from public.family_photos p;
+
 -- ---------------------------------------------------------------------------
 -- Grants (Supabase often has defaults; explicit is clearer)
 -- ---------------------------------------------------------------------------
@@ -497,6 +517,7 @@ grant select, insert, update, delete on public.daily_answers to authenticated;
 grant select, insert, update, delete on public.family_photos to authenticated;
 grant select, insert, delete on public.family_photo_likes to authenticated;
 grant select, insert, delete on public.family_photo_comments to authenticated;
+grant select on public.family_photos_with_counts to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Storage: answer images (path = {family_id}/{user_id}/{filename})

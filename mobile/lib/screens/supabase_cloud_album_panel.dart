@@ -274,6 +274,46 @@ class _SupabaseCloudAlbumPanelState extends State<SupabaseCloudAlbumPanel> {
                                       ),
                                     ),
                                   ),
+                                if (photo.likeCount > 0 || photo.commentCount > 0)
+                                  Positioned(
+                                    left: 4,
+                                    bottom: 4,
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(alpha: 0.55),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.favorite_rounded, size: 11, color: Color(0xFFFFB4A8)),
+                                            const SizedBox(width: 2),
+                                            Text(
+                                              '${photo.likeCount}',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            const Icon(Icons.chat_bubble_outline_rounded, size: 10, color: Colors.white70),
+                                            const SizedBox(width: 2),
+                                            Text(
+                                              '${photo.commentCount}',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                               ],
                             ),
                           ),

@@ -105,6 +105,17 @@ WITH
         AND t.tgname = 'families_add_creator_as_owner'
     )
   ),
+  missing_views AS (
+    SELECT
+      'missing_view_family_photos_with_counts' AS check_id,
+      'public.family_photos_with_counts view is missing' AS detail
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM information_schema.views v
+      WHERE v.table_schema = 'public'
+        AND v.table_name = 'family_photos_with_counts'
+    )
+  ),
   join_rpc_not_granted AS (
     SELECT
       'join_family_by_code_not_executable_by_authenticated' AS check_id,
@@ -187,6 +198,7 @@ WITH
     UNION ALL SELECT * FROM missing_columns_flat
     UNION ALL SELECT * FROM missing_functions
     UNION ALL SELECT * FROM missing_family_insert_trigger
+    UNION ALL SELECT * FROM missing_views
     UNION ALL SELECT * FROM join_rpc_not_granted
     UNION ALL SELECT * FROM storage_bucket
     UNION ALL SELECT * FROM storage_bucket_album

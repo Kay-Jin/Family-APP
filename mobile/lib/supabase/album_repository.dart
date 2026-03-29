@@ -16,7 +16,7 @@ class AlbumRepository {
 
   Future<List<CloudAlbumPhoto>> listPhotos(String familyId) async {
     final rows = await _client
-        .from('family_photos')
+        .from('family_photos_with_counts')
         .select()
         .eq('family_id', familyId)
         .order('created_at', ascending: false);
@@ -152,13 +152,12 @@ class AlbumRepository {
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) throw Exception('Not signed in');
-    final row = await _client
+    await _client
         .from('family_photos')
         .update({'caption': caption.trim()})
         .eq('id', photoId)
-        .eq('user_id', user.id)
-        .select()
-        .single();
+        .eq('user_id', user.id);
+    final row = await _client.from('family_photos_with_counts').select().eq('id', photoId).single();
     return CloudAlbumPhoto.fromJson(Map<String, dynamic>.from(row as Map));
   }
 
