@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:family_mobile/screens/home_screen.dart';
 import 'package:family_mobile/l10n/app_strings.dart';
 import 'package:family_mobile/push/care_local_notifications.dart';
+import 'package:family_mobile/push/family_brief_local_notifications.dart';
 import 'package:family_mobile/push/fcm_token_sync.dart';
 import 'package:family_mobile/screens/login_screen.dart';
 import 'package:family_mobile/screens/supabase_family_screen.dart';
@@ -29,6 +30,11 @@ Future<void> main() async {
     CareLocalNotifications.attachNavigator(navKey);
     await CareLocalNotifications.ensureInitialized();
     await CareLocalNotifications.rescheduleIfEnabled();
+    if (defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS) {
+      await FamilyBriefLocalNotifications.ensureInitialized();
+      await FamilyBriefLocalNotifications.rescheduleIfEnabled();
+    }
   }
   if (!kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
