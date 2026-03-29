@@ -2627,4 +2627,7 @@ with app.app_context():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=8000)
+    # Listen on all interfaces so phones on the same LAN can reach the API (see mobile README).
+    _host = os.environ.get("FLASK_HOST", "0.0.0.0").strip() or "0.0.0.0"
+    _port = int(os.environ.get("FLASK_PORT", "8000"))
+    app.run(debug=True, host=_host, port=_port)

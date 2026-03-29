@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:family_mobile/config/flask_api_config.dart';
 import 'package:family_mobile/screens/home_screen.dart';
 import 'package:family_mobile/l10n/app_strings.dart';
 import 'package:family_mobile/push/care_local_notifications.dart';
@@ -19,6 +20,7 @@ import 'package:flutter/foundation.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await FlaskApiConfig.loadFromPrefs();
   await Supabase.initialize(
     url: SupabaseConfig.url,
     anonKey: SupabaseConfig.anonKey,

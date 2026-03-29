@@ -24,6 +24,13 @@ pip install -r requirements.txt
 python app.py
 ```
 
+By default the dev server binds to **`0.0.0.0:8000`** so Flutter on a **physical phone** (same Wi‑Fi) can use `http://<your-pc-ip>:8000`. Override with env if needed:
+
+```text
+FLASK_HOST=127.0.0.1
+FLASK_PORT=8000
+```
+
 Open:
 
 - Health: <http://127.0.0.1:8000/health>

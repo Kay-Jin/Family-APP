@@ -1,4 +1,5 @@
 import 'package:family_mobile/api/api_client.dart';
+import 'package:family_mobile/config/flask_api_config.dart';
 import 'package:family_mobile/models/daily_question.dart';
 import 'package:family_mobile/models/daily_answer.dart';
 import 'package:family_mobile/models/activity_item.dart';
@@ -23,7 +24,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AppState extends ChangeNotifier {
-  final ApiClient _apiClient = ApiClient(baseUrl: _resolveBaseUrl());
+  ApiClient _apiClient = ApiClient(baseUrl: FlaskApiConfig.resolve());
 
   static const _pendingVoiceUploadKey = 'pending_voice_upload_v1';
   static const _pendingVoiceUploadErrorKey = 'pending_voice_upload_error_v1';
@@ -849,11 +850,17 @@ class AppState extends ChangeNotifier {
     });
   }
 
-  static String _resolveBaseUrl() {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      // Android emulator maps host loopback to 10.0.2.2.
-      return 'http://10.0.2.2:8000';
+  /// Current Flask base URL (after prefs / dart-define).
+  String get flaskBaseUrl => _apiClient.baseUrl;
+
+  /// Save URL from login screen, reset Flask session, reload stored prefs bootstrap state.
+  Future<void> applyFlaskBaseUrl(String raw, {bool clearOverride = false}) async {
+    if (clearOverride) {
+      await FlaskApiConfig.clearOverride();
+    } else {
+      await FlaskApiConfig.persistOverride(raw);
     }
-    return 'http://127.0.0.1:8000';
+    _apiClient = ApiClient(baseUrl: FlaskApiConfig.resolve());
+    await logout();
   }
 }

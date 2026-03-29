@@ -22,15 +22,32 @@ flutter pub get
 flutter run
 ```
 
-## 3) API base URL
+## 3) API base URL (Flask)
 
-Current API URL is in `lib/state/app_state.dart`:
+The app resolves the backend in this order:
 
-- `http://127.0.0.1:8000` (for emulator on same machine)
+1. **Build flag** `--dart-define=FLASK_BASE_URL=...` (highest priority; use for CI / fixed staging URLs).
+2. **Saved in the app** — on the login screen, expand **「Local Flask API」 / 本地 Flask 后端**, enter your URL, tap **Save & apply**.
+3. **Defaults** — Android emulator: `http://10.0.2.2:8000`; iOS simulator / desktop: `http://127.0.0.1:8000`.
 
-If testing on a real phone, change it to your computer LAN IP, e.g.:
+**Real phone on the same Wi‑Fi as your PC**
 
-- `http://192.168.1.10:8000`
+1. Start the backend (`../backend`); it listens on **`0.0.0.0:8000`** so LAN devices can connect.
+2. Find your PC’s IPv4 (e.g. `ipconfig` → `192.168.1.10`).
+3. In the app login screen, set base URL to `http://192.168.1.10:8000` (no trailing slash) and save.
+4. Allow the firewall for Python/port 8000 if Windows prompts.
+
+**Example commands**
+
+```powershell
+cd mobile
+# Optional: bake URL into release build
+flutter run --dart-define=FLASK_BASE_URL=http://192.168.1.10:8000
+```
+
+```powershell
+flutter build apk --dart-define=FLASK_BASE_URL=http://192.168.1.10:8000
+```
 
 ## 4) App structure (current)
 

@@ -1,5 +1,7 @@
+import 'package:family_mobile/config/flask_api_config.dart';
 import 'package:family_mobile/state/app_state.dart';
 import 'package:family_mobile/l10n/app_strings.dart';
+import 'package:family_mobile/theme/family_theme.dart';
 import 'package:family_mobile/util/api_error_message.dart';
 import 'package:family_mobile/wechat/wechat_config.dart';
 import 'package:flutter/foundation.dart';
@@ -47,8 +49,18 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController(text: 'Dad');
   final _codeController = TextEditingController(text: 'demo_code');
+  final _flaskUrlController = TextEditingController();
   bool _obscurePassword = true;
   bool _devExpanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _flaskUrlController.text = context.read<AppState>().flaskBaseUrl;
+    });
+  }
 
   @override
   void dispose() {
@@ -56,6 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _passwordController.dispose();
     _nameController.dispose();
     _codeController.dispose();
+    _flaskUrlController.dispose();
     super.dispose();
   }
 
@@ -69,7 +82,7 @@ class _LoginScreenState extends State<LoginScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFFFFEEE3), Color(0xFFFFF8F4)],
+            colors: [FamilyAppColors.chipBg, Color(0xFFFFF8F4)],
           ),
         ),
         child: SafeArea(
@@ -246,6 +259,84 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ],
                         const SizedBox(height: 16),
+                        ExpansionTile(
+                          title: Text(
+                            t.text('flask_backend_title'),
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Text(
+                            t.text('flask_backend_current').replaceAll('{url}', appState.flaskBaseUrl),
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: const Color(0xFF6D5A51),
+                                ),
+                          ),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Text(
+                                    t.text('flask_backend_hint'),
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          color: const Color(0xFF6D5A51),
+                                          height: 1.35,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  TextField(
+                                    controller: _flaskUrlController,
+                                    autocorrect: false,
+                                    decoration: InputDecoration(
+                                      labelText: t.text('flask_backend_field'),
+                                      prefixIcon: const Icon(Icons.dns_outlined),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: FilledButton(
+                                          onPressed: appState.isBusy
+                                              ? null
+                                              : () async {
+                                                  await appState.applyFlaskBaseUrl(
+                                                    _flaskUrlController.text,
+                                                  );
+                                                  if (!context.mounted) return;
+                                                  _flaskUrlController.text = appState.flaskBaseUrl;
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    SnackBar(content: Text(t.text('flask_backend_saved'))),
+                                                  );
+                                                },
+                                          child: Text(t.text('flask_backend_save')),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      OutlinedButton(
+                                        onPressed: appState.isBusy
+                                            ? null
+                                            : () async {
+                                                await appState.applyFlaskBaseUrl(
+                                                  '',
+                                                  clearOverride: true,
+                                                );
+                                                if (!context.mounted) return;
+                                                _flaskUrlController.text = FlaskApiConfig.resolve();
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(content: Text(t.text('flask_backend_saved'))),
+                                                );
+                                              },
+                                        child: Text(t.text('flask_backend_clear')),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
                         ExpansionTile(
                           title: Text(
                             t.text('dev_local_login'),
