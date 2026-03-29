@@ -70,12 +70,17 @@ class _SupabaseFamilyScreenState extends State<SupabaseFamilyScreen> {
   Future<void> _setDailyReminder(bool value) async {
     if (kIsWeb) return;
     try {
-      await CareLocalNotifications.setEnabled(
+      final permissionOk = await CareLocalNotifications.setEnabled(
         enabled: value,
         title: _t('care_notif_daily_title'),
         body: _t('care_notif_daily_body'),
       );
       if (mounted) setState(() => _dailyReminder = value);
+      if (mounted && value && !permissionOk) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_t('care_daily_reminder_permission_denied'))),
+        );
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_t('error_generic'))));

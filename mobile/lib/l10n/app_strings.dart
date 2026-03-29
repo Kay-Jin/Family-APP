@@ -277,6 +277,8 @@ class AppStrings {
       'snack_reminder_time_updated': 'Reminder time updated.',
       'snack_reminder_time_saved_reminder_off':
           'Time saved. Turn on the daily gentle reminder when you want notifications.',
+      'care_daily_reminder_permission_denied':
+          'Notifications are off for this app. Turn them on in system settings to get the daily reminder.',
       'care_notif_daily_title': 'Family care',
       'care_notif_daily_body': 'Take a moment to check in with your family.',
     },
@@ -525,6 +527,7 @@ class AppStrings {
       'care_daily_reminder_tap_change': '点击修改',
       'snack_reminder_time_updated': '已更新提醒时间。',
       'snack_reminder_time_saved_reminder_off': '已保存时间。需要收到提醒时请打开「每日温和提醒」。',
+      'care_daily_reminder_permission_denied': '本应用的通知权限已关闭。请在系统设置中开启通知以收到每日提醒。',
       'care_notif_daily_title': '家庭关怀',
       'care_notif_daily_body': '抽空看看家人、问候一声吧。',
     },
@@ -774,6 +777,8 @@ class AppStrings {
       'care_daily_reminder_tap_change': '탭하여 변경',
       'snack_reminder_time_updated': '알림 시간이 변경되었습니다.',
       'snack_reminder_time_saved_reminder_off': '시간이 저장되었습니다. 알림을 받으려면 매일 알림을 켜 주세요.',
+      'care_daily_reminder_permission_denied':
+          '이 앱 알림이 꺼져 있습니다. 매일 알림을 받으려면 기기 설정에서 알림을 켜 주세요.',
       'care_notif_daily_title': '가족 케어',
       'care_notif_daily_body': '가족에게 안부를 나눌 시간이에요.',
     },

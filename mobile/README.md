@@ -32,14 +32,12 @@ If testing on a real phone, change it to your computer LAN IP, e.g.:
 
 - `http://192.168.1.10:8000`
 
-## 4) Next steps
+## 4) App structure (current)
 
-- Replace mock code login with real WeChat SDK login
-- Add pages for:
-  - photo upload
-  - comments/likes
-  - birthday reminder create/list
-- Add routing and app shell
+- **Local (Flask) home**: `HomeScreen` — families, daily Q&A, photos (upload, comments, likes), birthday reminders, voice notes, etc.
+- **Cloud (Supabase)**: `SupabaseFamilyScreen` / detail — invite codes, care panel, cloud album, companion room, medical card sync, cloud birthdays, etc.
+- **Dual session**: when signed in to both backends, `DualSessionShell` uses a bottom nav (local home + cloud families).
+- **Still rough / prod**: mock WeChat code path for some flows; real WeChat SDK + Firebase (`flutterfire configure`) for production push — see §6.
 
 ## 5) If Android build times out on network
 
@@ -62,5 +60,5 @@ You can also double-click this file in Explorer:
 
 ## 6) Push notifications (FCM) and local care reminders
 
-- **Local daily reminder**: Cloud families screen → toggle “Daily gentle reminder” and set **Reminder time** (device-local schedule, not server push; default 10:00). Tapping the notification opens the cloud families flow when you are signed in with Supabase (including after cold start, with a short auth wait). In **dual mode** (local home + cloud tabs), the tap switches to the **Cloud** tab instead of stacking another cloud screen.
+- **Local daily reminder**: Cloud families screen → toggle “Daily gentle reminder” and set **Reminder time** (device-local schedule, not server push; default 10:00). If the OS denies notification permission when you turn it on, a snackbar suggests opening system settings. Tapping the notification opens the cloud families flow when you are signed in with Supabase (including after cold start, with a short auth wait). In **dual mode** (local home + cloud tabs), the tap switches to the **Cloud** tab instead of stacking another cloud screen.
 - **FCM token → Supabase** `device_push_tokens`: run `dart pub global activate flutterfire_cli` then `flutterfire configure` in `mobile/` to replace `lib/firebase_options.dart` and add real `android/app/google-services.json` (and iOS `GoogleService-Info.plist` when building for iOS). Placeholder files let the project compile; real tokens require a Firebase project.

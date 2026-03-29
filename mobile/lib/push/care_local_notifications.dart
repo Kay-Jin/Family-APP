@@ -133,7 +133,12 @@ class CareLocalNotifications {
     await _scheduleDaily(title: title, body: body);
   }
 
-  static Future<void> setEnabled({
+  /// Enables or disables the daily reminder.
+  ///
+  /// When [enabled] is true, returns `false` if the OS reports notification
+  /// permission denied (`false`); returns `true` if permission was granted,
+  /// is unknown (`null`, e.g. older Android), or when turning off.
+  static Future<bool> setEnabled({
     required bool enabled,
     required String title,
     required String body,
@@ -142,21 +147,25 @@ class CareLocalNotifications {
     await p.setBool(prefEnabled, enabled);
     if (!enabled) {
       await _plugin.cancel(_notifId);
-      return;
+      return true;
     }
     await p.setString(prefTitle, title);
     await p.setString(prefBody, body);
 
+    var permissionOk = true;
     if (defaultTargetPlatform == TargetPlatform.android) {
       final android = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-      await android?.requestNotificationsPermission();
+      final granted = await android?.requestNotificationsPermission();
+      if (granted == false) permissionOk = false;
     }
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       final ios = _plugin.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
-      await ios?.requestPermissions(alert: true, badge: true, sound: true);
+      final granted = await ios?.requestPermissions(alert: true, badge: true, sound: true);
+      if (granted == false) permissionOk = false;
     }
 
     await _scheduleDaily(title: title, body: body);
+    return permissionOk;
   }
 
   /// Call on startup after [ensureInitialized] so scheduled alarms survive restarts.
