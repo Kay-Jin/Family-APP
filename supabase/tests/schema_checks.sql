@@ -15,7 +15,7 @@ WITH
   exp_tables AS (
     SELECT unnest(ARRAY[
       'families', 'family_members', 'daily_questions', 'daily_answers', 'family_photos',
-      'family_photo_likes', 'family_photo_comments'
+      'family_photo_likes', 'family_photo_comments', 'device_push_tokens'
     ]) AS t
   ),
   missing_tables AS (
@@ -40,7 +40,7 @@ WITH
       AND c.relkind = 'r'
       AND c.relname IN (
         'families', 'family_members', 'daily_questions', 'daily_answers', 'family_photos',
-        'family_photo_likes', 'family_photo_comments'
+        'family_photo_likes', 'family_photo_comments', 'device_push_tokens'
       )
       AND c.relrowsecurity IS NOT TRUE
   ),
@@ -54,7 +54,8 @@ WITH
         ('daily_answers', ARRAY['id', 'question_id', 'user_id', 'author_display_name', 'answer_text', 'image_path', 'created_at']),
         ('family_photos', ARRAY['id', 'family_id', 'user_id', 'caption', 'image_path', 'uploader_display_name', 'created_at']),
         ('family_photo_likes', ARRAY['photo_id', 'user_id', 'created_at']),
-        ('family_photo_comments', ARRAY['id', 'photo_id', 'user_id', 'body', 'author_display_name', 'created_at'])
+        ('family_photo_comments', ARRAY['id', 'photo_id', 'user_id', 'body', 'author_display_name', 'created_at']),
+        ('device_push_tokens', ARRAY['id', 'user_id', 'token', 'platform', 'updated_at'])
     ) AS spec(tbl, cols)
     CROSS JOIN LATERAL unnest(spec.cols) AS c(col)
     WHERE NOT EXISTS (

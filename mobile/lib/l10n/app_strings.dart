@@ -50,6 +50,8 @@ class AppStrings {
       'enter_family_app': 'Enter Family App',
       'login_cloud_hint':
           'After sign-in, open the Cloud tab at the bottom for shared families, daily Q&A, and the photo album.',
+      'shell_cloud_tip':
+          'Tip: tap Cloud below for synced families, daily questions, and the shared album.',
       'signing_in': 'Signing in...',
       'family_home': 'Family Home',
       'invite_code': 'Invite Code',
@@ -249,6 +251,7 @@ class AppStrings {
       'mock_wechat_code': '模拟微信 Code',
       'enter_family_app': '进入家庭应用',
       'login_cloud_hint': '登录后，点击底部「云端」可与家人同步家庭、每日问答和云相册。',
+      'shell_cloud_tip': '提示：点击底部「云端」可管理同步家庭、每日问答与共享相册。',
       'signing_in': '登录中...',
       'family_home': '家庭主页',
       'invite_code': '邀请码',
@@ -446,6 +449,7 @@ class AppStrings {
       'mock_wechat_code': '모의 WeChat 코드',
       'enter_family_app': '가족 앱 시작',
       'login_cloud_hint': '로그인 후 하단의 클라우드 탭에서 가족, 오늘의 질문, 앨범을 함께 볼 수 있어요.',
+      'shell_cloud_tip': '팁: 아래 클라우드 탭에서 동기화된 가족, 오늘의 질문, 공유 앨범을 이용할 수 있어요.',
       'signing_in': '로그인 중...',
       'family_home': '가족 홈',
       'invite_code': '초대 코드',

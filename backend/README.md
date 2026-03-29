@@ -54,5 +54,5 @@ Authorization: Bearer <token>
 - Add auth middleware (JWT)
 - Add migration tool (Alembic or Flyway style migration scripts)
 - Move from SQLite to MySQL
-- Integrate push service (JPush or cloud push)
+- Integrate push service (JPush or cloud push). For **Supabase-signed-in** clients, prefer storing tokens in `public.device_push_tokens` (see repo `supabase/migrations/20260403_device_push_tokens.sql`) and sending from Edge Functions or your push worker—not this Flask SQLite API.
 - Add CI/CD and tests
