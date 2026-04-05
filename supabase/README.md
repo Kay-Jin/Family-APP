@@ -95,3 +95,12 @@ If your Cursor workspace is linked to Supabase (MCP), this function may already 
 ```json
 { "access_token": "...", "refresh_token": "..." }
 ```
+
+## Database advisor (periodic review)
+
+Supabase **Database Linter** / advisor may report:
+
+- **`families` RLS**: policies named like `public families write` / `update` / `delete` that use `WITH CHECK (true)` or `USING (true)` weaken row-level security. Tighten these when your product flow no longer needs wide-open mutations (see [permissive RLS](https://supabase.com/docs/guides/database/database-linter?lint=0024_permissive_rls_policy)).
+- **Auth**: enable **leaked password protection** (HaveIBeenPwned) under Auth settings for stronger password hygiene.
+
+Remote projects may contain migrations not yet mirrored as files under `migrations/` (e.g. applied from the Dashboard). Use `supabase db pull` (CLI) or MCP `list_migrations` to compare with this repo.
